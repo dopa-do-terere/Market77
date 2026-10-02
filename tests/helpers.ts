@@ -29,3 +29,9 @@ export async function seedMarketProduct(orgId: string, priceCents = 500) {
     };
   });
 }
+
+export async function makeUser(email: string): Promise<string> {
+  const [r] = await adminSql`
+    insert into users (email, password_hash) values (${email}, 'x') returning id`;
+  return r.id as string;
+}
