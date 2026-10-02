@@ -7,7 +7,7 @@ const Input = z.object({
   marketId: z.string().uuid(),
   productId: z.string().uuid(),
   priceCents: z.number().int().min(1).max(2147483647),
-  minStock: z.number().int().min(0).default(0),
+  minStock: z.number().int().min(0).max(2147483647).default(0),
   active: z.boolean().default(true),
 });
 
@@ -40,7 +40,7 @@ export async function setMarketProduct(tx: Tx, orgId: string, raw: unknown): Pro
 export async function listMarketProducts(tx: Tx, marketId: string): Promise<MarketProductRow[]> {
   const rows = await tx`
     select mp.id, mp.product_id, p.name, mp.price_cents, mp.min_stock, mp.active,
-      coalesce((select sum(s.quantity) from stock_movements s where s.market_product_id = mp.id), 0)::int as balance
+      coalesce((select sum(s.quantity) from stock_movements s where s.market_product_id = mp.id), 0)::bigint as balance
     from market_products mp join products p on p.id = mp.product_id
     where mp.market_id = ${marketId} order by p.name`;
   return rows.map((r) => ({
@@ -50,6 +50,6 @@ export async function listMarketProducts(tx: Tx, marketId: string): Promise<Mark
     priceCents: r.price_cents as number,
     minStock: r.min_stock as number,
     active: r.active as boolean,
-    balance: r.balance as number,
+    balance: Number(r.balance),
   }));
 }

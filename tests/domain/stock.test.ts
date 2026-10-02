@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { withOrg } from "@/db/tenant";
-import { setMarketProduct } from "@/domain/market-products";
+import { setMarketProduct, listMarketProducts } from "@/domain/market-products";
 import { getBalance, listLowStock, recordMovement } from "@/domain/stock";
 import { AppError } from "@/lib/errors";
 import { makeOrg, resetDb, seedMarketProduct } from "../helpers";
@@ -65,5 +65,18 @@ describe("stock ledger", () => {
     const a = await makeOrg("A");
     const { marketProductId: mp } = await seedMarketProduct(a);
     expect(await codeOf(move(a, mp, "in", 2147483648))).toBe("invalid_input");
+  });
+
+  it("handles large balance sums without integer overflow", async () => {
+    const a = await makeOrg("A");
+    const { marketId, marketProductId: mp } = await seedMarketProduct(a);
+    await move(a, mp, "in", 2147483647);
+    await move(a, mp, "in", 2147483647);
+    const balance = await withOrg(a, (tx) => getBalance(tx, mp));
+    expect(balance).toBe(4294967294);
+    const products = await withOrg(a, (tx) => listMarketProducts(tx, marketId));
+    expect(products[0].balance).toBe(4294967294);
+    const lowStock = await withOrg(a, (tx) => listLowStock(tx, marketId));
+    expect(lowStock).toEqual([]);
   });
 });

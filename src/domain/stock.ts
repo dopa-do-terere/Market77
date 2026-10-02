@@ -44,9 +44,9 @@ export async function recordMovement(
 
 export async function getBalance(tx: Tx, marketProductId: string): Promise<number> {
   const [r] = await tx`
-    select coalesce(sum(quantity), 0)::int as balance
+    select coalesce(sum(quantity), 0)::bigint as balance
     from stock_movements where market_product_id = ${marketProductId}`;
-  return r.balance as number;
+  return Number(r.balance);
 }
 
 export async function listLowStock(tx: Tx, marketId: string): Promise<MarketProductRow[]> {

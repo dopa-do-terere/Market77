@@ -30,6 +30,12 @@ describe("market products", () => {
     expect(await codeOf(withOrg(a, (tx) => setMarketProduct(tx, a, { marketId, productId, priceCents: 2147483648 })))).toBe("invalid_input");
   });
 
+  it("rejects minStock exceeding max integer", async () => {
+    const a = await makeOrg("A");
+    const { marketId, productId } = await seedMarketProduct(a);
+    expect(await codeOf(withOrg(a, (tx) => setMarketProduct(tx, a, { marketId, productId, priceCents: 100, minStock: 2147483648 })))).toBe("invalid_input");
+  });
+
   it("returns not_found when the market belongs to another tenant", async () => {
     const a = await makeOrg("A");
     const b = await makeOrg("B");
