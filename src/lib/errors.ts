@@ -11,3 +11,4 @@ export class AppError extends Error {
 const pgCode = (e: unknown) => (e as { code?: string } | null)?.code;
 export const isUniqueViolation = (e: unknown) => pgCode(e) === "23505";
 export const isForeignKeyViolation = (e: unknown) => pgCode(e) === "23503";
+export const isInsufficientPrivilege = (e: unknown) => pgCode(e) === "42501";

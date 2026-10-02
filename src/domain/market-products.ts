@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Tx } from "@/db/tenant";
-import { AppError, isForeignKeyViolation } from "@/lib/errors";
+import { AppError, isForeignKeyViolation, isInsufficientPrivilege } from "@/lib/errors";
 import { parse } from "@/lib/validate";
 
 const Input = z.object({
@@ -32,7 +32,7 @@ export async function setMarketProduct(tx: Tx, orgId: string, raw: unknown): Pro
       returning id`;
     return { id: row.id as string };
   } catch (e) {
-    if (isForeignKeyViolation(e)) throw new AppError("not_found");
+    if (isForeignKeyViolation(e) || isInsufficientPrivilege(e)) throw new AppError("not_found");
     throw e;
   }
 }

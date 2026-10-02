@@ -39,4 +39,15 @@ describe("market products", () => {
       await codeOf(withOrg(a, (tx) => setMarketProduct(tx, a, { marketId: theirs.marketId, productId: mine.productId, priceCents: 100 }))),
     ).toBe("not_found");
   });
+
+  it("returns not_found on cross-tenant upsert attempt and leaves other tenant data unchanged", async () => {
+    const a = await makeOrg("A");
+    const b = await makeOrg("B");
+    const theirs = await seedMarketProduct(b, 500);
+    expect(
+      await codeOf(withOrg(a, (tx) => setMarketProduct(tx, a, { marketId: theirs.marketId, productId: theirs.productId, priceCents: 999 }))),
+    ).toBe("not_found");
+    const [row] = await withOrg(b, (tx) => listMarketProducts(tx, theirs.marketId));
+    expect(row.priceCents).toBe(500);
+  });
 });
