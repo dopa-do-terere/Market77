@@ -19,7 +19,7 @@ export default async function TeamPage({
       {ok && <p>Membro adicionado.</p>}
       <form action={addMemberAction.bind(null, orgId)}>
         <label>E-mail <input name="email" type="email" required /></label>
-        <label>Senha inicial (só para usuário novo) <input name="password" type="password" minLength={8} /></label>
+        <label>Senha inicial <input name="password" type="password" minLength={8} required /></label>
         <label>
           Papel{" "}
           <select name="role">

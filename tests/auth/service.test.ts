@@ -52,26 +52,30 @@ describe("login", () => {
 });
 
 describe("memberships", () => {
-  it("adds a new user as manager and lets an existing user join a second org", async () => {
+  it("adds a new user as manager with required password", async () => {
     const a = await signUp(ana);
     await addMember(a.orgId, { email: "gil@x.com", password: "senha-gil-123", role: "manager" });
     const gil = await login({ email: "gil@x.com", password: "senha-gil-123" });
     expect(await getMembership(gil.userId, a.orgId)).toBe("manager");
-
-    const b = await signUp({ email: "bia@x.com", password: "senha-bia-123", orgName: "Bia" });
-    await addMember(b.orgId, { email: "gil@x.com", role: "restocker" });
-    const orgs = await listMemberships(gil.userId);
-    expect(orgs.map((o) => [o.orgName, o.role]).sort()).toEqual([
-      ["Bia", "restocker"],
-      ["Mercados Ana", "manager"],
-    ]);
   });
 
-  it("requires a password for a brand new user and rejects duplicates", async () => {
+  it("rejects existing email with email_taken", async () => {
     const a = await signUp(ana);
-    expect(await codeOf(addMember(a.orgId, { email: "novo@x.com", role: "manager" }))).toBe("invalid_input");
     await addMember(a.orgId, { email: "gil@x.com", password: "senha-gil-123", role: "manager" });
-    expect(await codeOf(addMember(a.orgId, { email: "gil@x.com", role: "manager" }))).toBe("already_member");
+    // Existing user cannot join another org without invitation flow
+    expect(await codeOf(addMember(a.orgId, { email: "GIL@x.com", password: "outra-senha-123", role: "restocker" }))).toBe("email_taken");
+    // Verify no membership was created
+    const gil = await login({ email: "gil@x.com", password: "senha-gil-123" });
+    const orgs = await listMemberships(gil.userId);
+    expect(orgs.length).toBe(1);
+    expect(orgs[0].role).toBe("manager");
+  });
+
+  it("requires a password and rejects duplicate in same org", async () => {
+    const a = await signUp(ana);
+    expect(await codeOf(addMember(a.orgId, { email: "novo@x.com", password: "", role: "manager" }))).toBe("invalid_input");
+    await addMember(a.orgId, { email: "gil@x.com", password: "senha-gil-123", role: "manager" });
+    expect(await codeOf(addMember(a.orgId, { email: "gil@x.com", password: "outra-senha-123", role: "manager" }))).toBe("email_taken");
   });
 
   it("returns null for a non-uuid org id instead of throwing", async () => {

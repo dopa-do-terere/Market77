@@ -13,7 +13,7 @@ const SignUp = z.object({ email, password, orgName: z.string().trim().min(2).max
 const Login = z.object({ email, password: z.string().min(1) });
 const AddMember = z.object({
   email,
-  password: password.optional(),
+  password: password,
   role: z.enum(["manager", "restocker"]),
 });
 
@@ -48,15 +48,20 @@ export async function login(raw: unknown) {
   return { userId: u.id as string, token, expiresAt };
 }
 
-/** Existing users keep their own password; only brand new users get the one provided. */
+/** Creates a new user account only; existing emails are rejected. Awaits an invitation-with-accept flow for linking existing accounts. */
 export async function addMember(orgId: string, raw: unknown): Promise<void> {
   const input = parse(AddMember, raw);
+  // ponytail: email_taken surfaces in two cases: existing user or race creating same email; upgrade path is invite-with-accept flow.
   await adminSql.begin(async (tx) => {
-    let [u] = await tx`select id from users where email = ${input.email}`;
-    if (!u) {
-      if (!input.password) throw new AppError("invalid_input", "password required for new user");
-      const hash = await hashPassword(input.password);
+    const [existingUser] = await tx`select id from users where email = ${input.email}`;
+    if (existingUser) throw new AppError("email_taken");
+    const hash = await hashPassword(input.password);
+    let u;
+    try {
       [u] = await tx`insert into users (email, password_hash) values (${input.email}, ${hash}) returning id`;
+    } catch (e) {
+      if (isUniqueViolation(e)) throw new AppError("email_taken");
+      throw e;
     }
     try {
       await tx`insert into memberships (org_id, user_id, role) values (${orgId}, ${u.id}, ${input.role})`;
