@@ -1,4 +1,4 @@
-import { requireOrg } from "@/auth/guard";
+import { requireOrgPage } from "@/auth/guard";
 import { message } from "@/lib/messages";
 import { addMemberAction } from "./actions";
 
@@ -11,7 +11,7 @@ export default async function TeamPage({
 }) {
   const { orgId } = await params;
   const { error, ok } = await searchParams;
-  await requireOrg(orgId, "member:write");
+  await requireOrgPage(orgId, "member:write");
   return (
     <main>
       <h1>Equipe</h1>

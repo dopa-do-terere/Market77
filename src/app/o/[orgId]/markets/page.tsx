@@ -1,4 +1,4 @@
-import { requireOrg } from "@/auth/guard";
+import { requireOrgPage } from "@/auth/guard";
 import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listMarkets } from "@/domain/markets";
@@ -14,7 +14,7 @@ export default async function MarketsPage({
 }) {
   const { orgId } = await params;
   const { error } = await searchParams;
-  const { role } = await requireOrg(orgId, "catalog:read");
+  const { role } = await requireOrgPage(orgId, "catalog:read");
   const markets = await withOrg(orgId, (tx) => listMarkets(tx));
   return (
     <main>

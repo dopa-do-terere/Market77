@@ -1,4 +1,4 @@
-import { requireOrg } from "@/auth/guard";
+import { requireOrgPage } from "@/auth/guard";
 import { can } from "@/auth/permissions";
 import { logoutAction } from "./actions";
 
@@ -10,7 +10,7 @@ export default async function OrgLayout({
   params: Promise<{ orgId: string }>;
 }) {
   const { orgId } = await params;
-  const { role } = await requireOrg(orgId);
+  const { role } = await requireOrgPage(orgId);
   const base = `/o/${orgId}`;
   return (
     <div>

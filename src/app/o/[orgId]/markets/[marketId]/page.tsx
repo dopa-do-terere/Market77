@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { requireOrg } from "@/auth/guard";
+import { requireOrgPage } from "@/auth/guard";
 import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listMarketProducts } from "@/domain/market-products";
@@ -18,7 +18,7 @@ export default async function MarketPage({
 }) {
   const { orgId, marketId } = await params;
   const { error } = await searchParams;
-  const { role } = await requireOrg(orgId, "stock:read");
+  const { role } = await requireOrgPage(orgId, "stock:read");
   if (!z.string().uuid().safeParse(marketId).success) notFound();
   const { rows, products } = await withOrg(orgId, async (tx) => ({
     rows: await listMarketProducts(tx, marketId),

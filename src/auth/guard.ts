@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AppError } from "@/lib/errors";
 import { type Action, type Role, can } from "./permissions";
 import { getMembership } from "./service";
@@ -23,4 +23,19 @@ export async function requireOrg(
   const role = await getMembership(userId, orgId);
   if (!role || (action && !can(role, action))) throw new AppError("forbidden");
   return { userId, role };
+}
+
+/** For pages and layouts: calls requireOrg and converts forbidden errors to 404. */
+export async function requireOrgPage(
+  orgId: string,
+  action?: Action,
+): Promise<{ userId: string; role: Role }> {
+  try {
+    return await requireOrg(orgId, action);
+  } catch (e) {
+    if (e instanceof AppError && e.code === "forbidden") {
+      notFound();
+    }
+    throw e;
+  }
 }

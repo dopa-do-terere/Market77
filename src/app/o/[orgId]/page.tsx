@@ -1,11 +1,11 @@
-import { requireOrg } from "@/auth/guard";
+import { requireOrgPage } from "@/auth/guard";
 import { withOrg } from "@/db/tenant";
 import { listMarkets } from "@/domain/markets";
 import { listLowStock } from "@/domain/stock";
 
 export default async function Dashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
-  await requireOrg(orgId, "stock:read");
+  await requireOrgPage(orgId, "stock:read");
   const markets = await withOrg(orgId, async (tx) =>
     Promise.all((await listMarkets(tx)).map(async (m) => ({ ...m, low: await listLowStock(tx, m.id) }))),
   );
