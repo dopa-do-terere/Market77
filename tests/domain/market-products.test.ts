@@ -56,4 +56,19 @@ describe("market products", () => {
     const [row] = await withOrg(b, (tx) => listMarketProducts(tx, theirs.marketId));
     expect(row.priceCents).toBe(500);
   });
+
+  it("keeps tracksExpiry when an update omits it and changes it when given", async () => {
+    const a = await makeOrg("A");
+    const { marketId, productId } = await seedMarketProduct(a);
+    const set = (extra: object) =>
+      withOrg(a, (tx) => setMarketProduct(tx, a, { marketId, productId, priceCents: 500, ...extra }));
+    const read = async () => (await withOrg(a, (tx) => listMarketProducts(tx, marketId)))[0].tracksExpiry;
+    expect(await read()).toBe(false);
+    await set({ tracksExpiry: true });
+    expect(await read()).toBe(true);
+    await set({ priceCents: 600 });
+    expect(await read()).toBe(true);
+    await set({ tracksExpiry: false });
+    expect(await read()).toBe(false);
+  });
 });
