@@ -38,7 +38,15 @@ export default async function MarketPage({
               <td>{r.name}</td>
               <td>{formatBRL(r.priceCents)}</td>
               <td>{r.minStock}</td>
-              <td>{r.balance <= r.minStock ? <strong>{r.balance} (baixo)</strong> : r.balance}</td>
+              <td>
+                {r.balance < 0 ? (
+                  <strong>{r.balance} (negativo)</strong>
+                ) : r.balance <= r.minStock ? (
+                  <strong>{r.balance} (baixo)</strong>
+                ) : (
+                  r.balance
+                )}
+              </td>
               <td>{r.active ? "sim" : "não"}</td>
               <td>
                 {can(role, "stock:move") && (
