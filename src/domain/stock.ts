@@ -97,3 +97,29 @@ export async function getBalance(tx: Tx, marketProductId: string): Promise<numbe
 export async function listLowStock(tx: Tx, marketId: string): Promise<MarketProductRow[]> {
   return (await listMarketProducts(tx, marketId)).filter((r) => r.active && r.balance <= r.minStock);
 }
+
+/**
+ * Takes a paid sale out of stock: one movement per product, split by lot (first-expired-first-out)
+ * for products that track expiry. The unique index on (sale, product, lot) makes a repeat a no-op error.
+ */
+export async function debitSale(tx: Tx, saleId: string): Promise<void> {
+  const items = await tx`
+    select org_id, market_product_id, quantity from sale_items where sale_id = ${saleId} order by market_product_id`;
+  if (items.length === 0) return;
+  const ids = items.map((i) => i.market_product_id as string);
+  const tracked = new Set(
+    (await tx`select id from market_products where id in ${tx(ids)} and tracks_expiry`).map((r) => r.id as string),
+  );
+  await lockProducts(tx, [...tracked]);
+  for (const it of items) {
+    const mpId = it.market_product_id as string;
+    const parts: Allocation[] = tracked.has(mpId)
+      ? await allocateFefo(tx, mpId, it.quantity as number)
+      : [{ lotId: null, quantity: it.quantity as number }];
+    for (const p of parts) {
+      await tx`
+        insert into stock_movements (org_id, market_product_id, type, quantity, sale_id, lot_id)
+        values (${it.org_id}, ${mpId}, 'sale', ${-p.quantity}, ${saleId}, ${p.lotId})`;
+    }
+  }
+}

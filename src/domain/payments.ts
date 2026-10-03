@@ -6,6 +6,7 @@ import type { CardProvider } from "@/payments/card";
 import { type PaymentProvider, withTimeout } from "@/payments/provider";
 import { getCardProvider } from "@/payments/registry";
 import { type SaleView, type TerminalCtx, getSaleView, lockSale, reopenSale } from "./sales";
+import { debitSale } from "./stock";
 
 export const QR_TTL_MS = 3 * 60_000;
 export const CARD_TTL_MS = 2 * 60_000;
@@ -170,9 +171,7 @@ export async function confirmPayment(
     update payments set status = 'expired' where sale_id = ${sale.id} and status = 'pending' and id <> ${paymentId}
     returning method, external_id`;
   await tx`update sales set status = 'paid', paid_at = ${now} where id = ${sale.id}`;
-  await tx`
-    insert into stock_movements (org_id, market_product_id, type, quantity, sale_id)
-    select org_id, market_product_id, 'sale', -quantity, sale_id from sale_items where sale_id = ${sale.id}`;
+  await debitSale(tx, sale.id as string);
   for (const e of ended) {
     if (e.method !== "card") continue;
     // ponytail: best-effort stop of the machine, no retry; a charge it still approves is rejected above.
