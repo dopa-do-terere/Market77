@@ -57,7 +57,7 @@ Sem backfill: os movimentos existentes ficam com `lot_id` nulo e valem como sald
 
 **Alertas** (`src/domain/lots.ts`): `listExpiryAlerts(tx, marketId, now)` devolve os lotes com saldo positivo que vencem em até 7 dias ou já venceram: produto, validade, quantidade, situação (`expired` ou `expiring`). `countExpired(tx, orgId)` para a página inicial.
 
-**Mensagem** (`src/lib/messages.ts`): `product_expired`: "Produto vencido. Procure o atendimento." O status HTTP segue o mapeamento de erros de entrada do PDV (409).
+**Mensagem** (`src/lib/messages.ts`): `product_expired`: "Produto vencido. Procure o atendimento." O status HTTP em `src/pdv/http.ts` é 404, como `product_inactive`.
 
 ## 5. Painel do dono
 
@@ -83,7 +83,7 @@ Sem backfill: os movimentos existentes ficam com `lot_id` nulo e valem como sald
 - Bloqueio: sem lote, só vencido, vencido mais válido, só sem lote; a flag desligada não bloqueia.
 - Alertas: janela de 7 dias, vencidos, lote zerado não aparece.
 - Segurança: RLS em `stock_lots` (organização A nunca lê nem usa lote da B).
-- HTTP: `POST /api/pdv/sales/items` devolve 409 com a mensagem em português para produto vencido.
+- HTTP: `POST /api/pdv/sales/items` devolve 404 com a mensagem em português para produto vencido.
 - Manual: entrada com validade no painel, venda no totem, alerta de vencendo e totem recusando o produto vencido.
 
 ## 8. Fases seguintes
