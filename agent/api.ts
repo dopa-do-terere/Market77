@@ -36,10 +36,10 @@ export function createApi(cfg: { serverUrl: string; token: string }, fetchFn: ty
       return data.command ?? null;
     },
     async reportResult(id: string, ok: boolean, error?: string): Promise<void> {
-      await request("POST", `/api/agent/commands/${id}/result`, { ok, error }, CALL_TIMEOUT_MS);
+      await request("POST", `/api/agent/commands/${encodeURIComponent(id)}/result`, { ok, error }, CALL_TIMEOUT_MS);
     },
     async downloadRelease(version: string): Promise<{ data: Buffer; sha256: string | null }> {
-      const res = await request("GET", `/api/agent/releases/${version}`, undefined, DOWNLOAD_TIMEOUT_MS);
+      const res = await request("GET", `/api/agent/releases/${encodeURIComponent(version)}`, undefined, DOWNLOAD_TIMEOUT_MS);
       return { data: Buffer.from(await res.arrayBuffer()), sha256: res.headers.get("x-sha256") };
     },
   };

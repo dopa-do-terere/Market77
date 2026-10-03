@@ -5,6 +5,7 @@ export const REVOKED_RETRY_MS = 300_000;
 export const FAILURES_BEFORE_RESTART = 5;
 const REPORT_TRIES = 3;
 const REPORT_RETRY_MS = 2_000;
+const SHA_RE = /^[0-9a-f]{64}$/;
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
 
 export type AgentDeps = {
@@ -61,7 +62,7 @@ export function createAgent(d: AgentDeps): { tick(): Promise<number> } {
       return;
     }
     if (cmd.type === "update") {
-      if (!cmd.version || !cmd.sha256 || !VERSION_RE.test(cmd.version)) {
+      if (!cmd.version || !cmd.sha256 || !VERSION_RE.test(cmd.version) || !SHA_RE.test(cmd.sha256)) {
         await report(cmd.id, false, "invalid_update");
         return;
       }
@@ -108,9 +109,9 @@ export function createAgent(d: AgentDeps): { tick(): Promise<number> } {
     }
     failures = 0;
     if (!booted) {
-      booted = true;
       try {
         await d.update.confirmBoot();
+        booted = true;
       } catch (e) {
         d.log(`confirmBoot failed: ${reason(e)}`);
       }

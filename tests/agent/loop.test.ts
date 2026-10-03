@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError, type Command } from "../../agent/api.ts";
 import { FAILURES_BEFORE_RESTART, HEARTBEAT_MS, REVOKED_RETRY_MS, createAgent } from "../../agent/loop.ts";
 
-function setup(over: { heartbeat?: () => Promise<Command | null>; reportResult?: () => Promise<void>; apply?: () => Promise<void>; running?: boolean } = {}) {
+function setup(over: { confirmBoot?: () => Promise<void>; heartbeat?: () => Promise<Command | null>; reportResult?: () => Promise<void>; apply?: () => Promise<void>; running?: boolean } = {}) {
   const events: string[] = [];
   const beats: unknown[] = [];
   const agent = createAgent({
@@ -37,6 +37,7 @@ function setup(over: { heartbeat?: () => Promise<Command | null>; reportResult?:
       },
       confirmBoot: async () => {
         events.push("confirmBoot");
+        if (over.confirmBoot) await over.confirmBoot();
       },
     },
     version: "1.0.0",
@@ -47,6 +48,7 @@ function setup(over: { heartbeat?: () => Promise<Command | null>; reportResult?:
   });
   return { agent, events, beats };
 }
+const SHA = "ab".repeat(32);
 const cmd = (c: Partial<Command> & { type: string }): Command => ({ id: "c1", ...c });
 
 describe("heartbeat loop", () => {
@@ -148,14 +150,14 @@ describe("commands", () => {
   });
 
   it("update applies the package, reports success and then exits so systemd starts the new version", async () => {
-    const a = setup({ heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: "ab" }) });
+    const a = setup({ heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: SHA }) });
     await a.agent.tick();
-    expect(a.events.filter((e) => e !== "confirmBoot")).toEqual(["update.apply:1.1.0:ab", "report:c1:true", "system.exit"]);
+    expect(a.events.filter((e) => e !== "confirmBoot")).toEqual([`update.apply:1.1.0:${SHA}`, "report:c1:true", "system.exit"]);
   });
 
   it("update still exits when the success report cannot be delivered, because the package is already switched", async () => {
     const a = setup({
-      heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: "ab" }),
+      heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: SHA }),
       reportResult: async () => {
         throw new Error("network");
       },
@@ -165,20 +167,20 @@ describe("commands", () => {
   });
 
   it("update to the version already running just reports success", async () => {
-    const a = setup({ heartbeat: async () => cmd({ type: "update", version: "1.0.0", sha256: "ab" }) });
+    const a = setup({ heartbeat: async () => cmd({ type: "update", version: "1.0.0", sha256: SHA }) });
     await a.agent.tick();
     expect(a.events.filter((e) => e !== "confirmBoot")).toEqual(["report:c1:true"]);
   });
 
   it("update that fails reports the error and does not exit", async () => {
     const a = setup({
-      heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: "ab" }),
+      heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: SHA }),
       apply: async () => {
         throw new Error("sha256_mismatch");
       },
     });
     await a.agent.tick();
-    expect(a.events.filter((e) => e !== "confirmBoot")).toEqual(["update.apply:1.1.0:ab", "report:c1:false:sha256_mismatch"]);
+    expect(a.events.filter((e) => e !== "confirmBoot")).toEqual([`update.apply:1.1.0:${SHA}`, "report:c1:false:sha256_mismatch"]);
   });
 
   it("update without a version or hash fails without touching the disk", async () => {
@@ -216,5 +218,27 @@ describe("commands", () => {
     });
     await agent.tick();
     expect(events).toEqual(["report:c1:false:chromium_missing"]);
+  });
+});
+
+describe("hardening", () => {
+  it("retries confirmBoot after a failure, then stops, and still runs the command", async () => {
+    let n = 0;
+    const a = setup({
+      heartbeat: async () => cmd({ type: "restart_pdv" }),
+      confirmBoot: async () => {
+        n += 1;
+        if (n === 1) throw new Error("rm failed");
+      },
+    });
+    for (let i = 0; i < 4; i++) await a.agent.tick();
+    expect(a.events.filter((e) => e === "confirmBoot")).toHaveLength(2);
+    expect(a.events.filter((e) => e === "browser.restart")).toHaveLength(4);
+  });
+
+  it("update with an invalid sha fails without applying", async () => {
+    const a = setup({ heartbeat: async () => cmd({ type: "update", version: "1.1.0", sha256: "ab" }) });
+    await a.agent.tick();
+    expect(a.events.filter((e) => e !== "confirmBoot")).toEqual(["report:c1:false:invalid_update"]);
   });
 });

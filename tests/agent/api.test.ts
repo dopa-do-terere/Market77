@@ -64,4 +64,10 @@ describe("agent api client", () => {
     expect(calls[0].url).toBe("https://m77.example.com/api/agent/releases/1.2.3");
     expect([got.data.equals(Buffer.from(bytes)), got.sha256]).toEqual([true, "abc"]);
   });
+
+  it("encodes path segments", async () => {
+    const { fn, calls } = fakeFetch(() => json(200, {}));
+    await createApi(cfg, fn).reportResult("../x", true);
+    expect(calls[0].url).toBe("https://m77.example.com/api/agent/commands/..%2Fx/result");
+  });
 });
