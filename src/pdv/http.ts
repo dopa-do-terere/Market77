@@ -1,8 +1,10 @@
+import { z } from "zod";
 import { withOrg } from "@/db/tenant";
-import { startPayment } from "@/domain/payments";
+import { cancelPayment, startPayment } from "@/domain/payments";
 import { refreshSale } from "@/domain/refresh";
 import { addItemByBarcode, cancelSale, setItemQuantity } from "@/domain/sales";
 import { AppError } from "@/lib/errors";
+import { parse } from "@/lib/validate";
 import { message } from "@/lib/messages";
 import { getProvider } from "@/payments/registry";
 import { type TerminalAuth, requireTerminal } from "./auth";
@@ -69,10 +71,27 @@ export const setQuantityHandler = (req: Request, saleId: string, itemId: string,
     );
   });
 
+const PayInput = z.object({ method: z.enum(["pix", "card"]).optional() });
+
+/** An optional JSON body: empty means {}; broken JSON is invalid_input. */
+async function optionalBody(req: Request): Promise<unknown> {
+  const text = await req.text();
+  if (text.trim() === "") return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AppError("invalid_input");
+  }
+}
+
 export const payHandler = (req: Request, saleId: string, now: Date = new Date()) =>
-  handle(req, (t) =>
-    withOrg(t.orgId, (tx) => startPayment(tx, t.orgId, ctx(t), saleId, getProvider(), now)),
-  );
+  handle(req, async (t) => {
+    const { method } = parse(PayInput, await optionalBody(req));
+    return withOrg(t.orgId, (tx) => startPayment(tx, t.orgId, ctx(t), saleId, getProvider(), now, { method }));
+  });
+
+export const cancelPaymentHandler = (req: Request, saleId: string, now: Date = new Date()) =>
+  handle(req, (t) => withOrg(t.orgId, (tx) => cancelPayment(tx, ctx(t), saleId, now)));
 
 export const getSaleHandler = (req: Request, saleId: string, now: Date = new Date()) =>
   handle(req, (t) => withOrg(t.orgId, (tx) => refreshSale(tx, ctx(t), saleId, getProvider(), now)));

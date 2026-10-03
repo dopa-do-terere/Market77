@@ -17,7 +17,7 @@ async function awaitingIn(name: string) {
   await seedSellable(orgId, store.marketId, { barcode: "B-1", priceCents: 500 });
   const sale = await withOrg(orgId, (tx) => addItemByBarcode(tx, orgId, store, { barcode: "B-1" }, NOW));
   const view = await withOrg(orgId, (tx) => startPayment(tx, orgId, store, sale.id, fakeProvider, NOW));
-  return { saleId: sale.id, externalId: view.payment!.qrPayload.split("|")[1] };
+  return { saleId: sale.id, externalId: view.payment!.qrPayload!.split("|")[1] };
 }
 
 it("pays sales of every tenant whose provider already confirmed, and leaves the rest waiting", async () => {

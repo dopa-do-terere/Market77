@@ -54,6 +54,21 @@ curl -X POST https://seu-servidor/api/internal/reconcile -H "x-reconcile-secret:
 
 O pacote do agente fica no Postgres (limite de 20 MB). Variáveis novas: `RELEASE_SECRET` (publicar pacote).
 
+## Cartão (fase 4)
+
+O totem tem os botões **Pagar com Pix** e **Pagar com cartão**. No cartão a tela pede para seguir as instruções na maquininha (2 minutos), com o botão **Cancelar**. Aprovação paga a venda e baixa o estoque como no Pix; recusa, cancelamento e tempo esgotado devolvem o carrinho com o motivo.
+
+Ainda não há maquininha real escolhida: em desenvolvimento o cartão é simulado (`CARD_PROVIDER=fake`). Para "passar o cartão" de uma cobrança, pegue o identificador do pagamento (`select external_id from payments order by created_at desc limit 1`) e use:
+
+```bash
+curl -X POST http://localhost:3000/api/dev/fake-card/<identificador>/approve
+curl -X POST http://localhost:3000/api/dev/fake-card/<identificador>/decline
+```
+
+Variáveis: `CARD_PROVIDER=fake` e `FAKE_CARD_SECRET` (assinatura do webhook simulado). O webhook do provedor de cartão é `POST /api/webhooks/card/<provedor>`. O adaptador `fake` de cartão e as rotas `/api/dev/fake-card` recusam funcionar com `NODE_ENV=production`.
+
+Um adaptador real implementa a interface `CardProvider` (`src/payments/card.ts`) e passa na suíte de contrato `tests/payments/card-contract.ts`. Se a maquininha escolhida exigir SDK local, será preciso uma ponte pelo agente do totem (fase própria).
+
 ## Testes
 
 `docker compose up -d && npm test` (usa o banco `market77_test`).

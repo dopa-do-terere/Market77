@@ -18,7 +18,7 @@ async function awaiting() {
   await seedSellable(orgId, store.marketId, { barcode: BARCODE, priceCents: 500 });
   const sale = await withOrg(orgId, (tx) => addItemByBarcode(tx, orgId, store, { barcode: BARCODE }, NOW));
   const view = await withOrg(orgId, (tx) => startPayment(tx, orgId, store, sale.id, fakeProvider, NOW));
-  return { saleId: sale.id, externalId: view.payment!.qrPayload.split("|")[1] };
+  return { saleId: sale.id, externalId: view.payment!.qrPayload!.split("|")[1] };
 }
 const movements = async (saleId: string) =>
   (await adminSql`select count(*)::int as n from stock_movements where sale_id = ${saleId}`)[0].n as number;
