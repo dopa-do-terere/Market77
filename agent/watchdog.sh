@@ -14,8 +14,9 @@ read -r from deadline < "$MARKER" || true
 [[ "${deadline:-}" =~ ^[0-9]+$ ]] || { rm -f "$MARKER"; exit 0; }
 [ "$(date +%s)" -ge "$deadline" ] || exit 0
 
-rm -f "$MARKER"
-[[ "${from:-}" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || exit 0
-[ -d "$BASE/releases/$from" ] || exit 0
+[[ "${from:-}" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || { rm -f "$MARKER"; exit 0; }
+[ -d "$BASE/releases/$from" ] || { rm -f "$MARKER"; exit 0; }
 ln -sfn "releases/$from" "$BASE/current"
 "$SYSTEMCTL" restart market77-agent
+# Marker goes last so a power loss mid-rollback just repeats it on the next run.
+rm -f "$MARKER"

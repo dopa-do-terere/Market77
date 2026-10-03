@@ -45,6 +45,21 @@ describe("watchdog", () => {
     expect(await s.calls()).toBe("restart market77-agent\n");
   });
 
+  it("rolls back when the marker has no trailing newline", async () => {
+    const s = await setup("1.0.0 1");
+    expect(s.run().status).toBe(0);
+    expect(await readlink(join(s.base, "current"))).toBe(join("releases", "1.0.0"));
+    expect(await exists(join(s.base, "pending-update"))).toBe(false);
+  });
+
+  it("keeps the marker if the restart fails, so the rollback is retried", async () => {
+    const s = await setup("1.0.0 1\n");
+    await writeFile(join(s.base, "fake-systemctl.sh"), "#!/bin/sh\nexit 1\n");
+    expect(s.run().status).not.toBe(0);
+    expect(await readlink(join(s.base, "current"))).toBe(join("releases", "1.0.0"));
+    expect(await exists(join(s.base, "pending-update"))).toBe(true);
+  });
+
   it("drops a marker with a malformed version without touching anything", async () => {
     const s = await setup("../../etc 1\n");
     expect(s.run().status).toBe(0);

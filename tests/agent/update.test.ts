@@ -36,7 +36,19 @@ describe("applyUpdate", () => {
   it("installs the package, writes the rollback marker and switches the symlink last", async () => {
     const base = await makeBase();
     const { data, sha } = await makeTarball({ "main.ts": "new", VERSION: "1.1.0\n" });
-    await applyUpdate(deps(base, data), "1.1.0", sha);
+    const seen: string[] = [];
+    const d = {
+      ...deps(base, data),
+      extract: async (t: string, dest: string) => {
+        seen.push(`extract:${await readlink(join(base, "current"))}`);
+        await extractTar(t, dest);
+      },
+      sync: async () => {
+        seen.push(`sync:${await readlink(join(base, "current"))}:${await readFile(join(base, "pending-update"), "utf8")}`);
+      },
+    };
+    await applyUpdate(d, "1.1.0", sha);
+    expect(seen).toEqual([`extract:${join("releases", "1.0.0")}`, `sync:${join("releases", "1.0.0")}:1.0.0 1120\n`]);
     expect(await readlink(join(base, "current"))).toBe(join("releases", "1.1.0"));
     expect(await readFile(join(base, "releases", "1.1.0", "main.ts"), "utf8")).toBe("new");
     expect(await readFile(join(base, "pending-update"), "utf8")).toBe("1.0.0 1120\n");
@@ -57,6 +69,7 @@ describe("applyUpdate", () => {
     const base = await makeBase();
     const { data, sha } = await makeTarball({ "other.txt": "x" });
     await expect(applyUpdate(deps(base, data), "1.1.0", sha)).rejects.toThrow(/invalid_package/);
+    expect(await exists(join(base, "pending-update"))).toBe(false);
     expect(await readlink(join(base, "current"))).toBe(join("releases", "1.0.0"));
     expect(await readdir(join(base, "releases"))).toEqual(["1.0.0"]);
   });
@@ -66,8 +79,26 @@ describe("applyUpdate", () => {
     const data = Buffer.from("this is not a tarball");
     const sha = createHash("sha256").update(data).digest("hex");
     await expect(applyUpdate(deps(base, data), "1.1.0", sha)).rejects.toThrow();
+    expect(await exists(join(base, "pending-update"))).toBe(false);
     expect(await readlink(join(base, "current"))).toBe(join("releases", "1.0.0"));
     expect(await readdir(join(base, "releases"))).toEqual(["1.0.0"]);
+  });
+
+  it("leaves the disk as it was when sync fails", async () => {
+    const base = await makeBase();
+    const { data, sha } = await makeTarball({ "main.ts": "new" });
+    const d = { ...deps(base, data), sync: async () => { throw new Error("sync_failed"); } };
+    await expect(applyUpdate(d, "1.1.0", sha)).rejects.toThrow(/sync_failed/);
+    expect(await readlink(join(base, "current"))).toBe(join("releases", "1.0.0"));
+    expect((await readdir(join(base, "releases")))).toEqual(["1.0.0"]);
+    expect((await readdir(base)).sort()).toEqual(["current", "releases"]);
+  });
+
+  it("refuses to update to the running version", async () => {
+    const base = await makeBase();
+    const { data, sha } = await makeTarball({ "main.ts": "new" });
+    await expect(applyUpdate(deps(base, data), "1.0.0", sha)).rejects.toThrow(/already_current/);
+    expect(await readFile(join(base, "releases", "1.0.0", "main.ts"), "utf8")).toBe("old");
   });
 
   it("refuses a malformed version before downloading anything", async () => {
@@ -90,6 +121,15 @@ describe("confirmBoot", () => {
     await confirmBoot(base);
     expect(await exists(join(base, "pending-update"))).toBe(false);
     expect((await readdir(join(base, "releases"))).sort()).toEqual(["1.0.0", "1.1.0"]);
+  });
+
+  it("removes a garbage marker without pruning anything", async () => {
+    const base = await makeBase();
+    await mkdir(join(base, "releases", "0.9.0"), { recursive: true });
+    await writeFile(join(base, "pending-update"), "garbage 1\n");
+    await confirmBoot(base);
+    expect(await exists(join(base, "pending-update"))).toBe(false);
+    expect((await readdir(join(base, "releases"))).sort()).toEqual(["0.9.0", "1.0.0"]);
   });
 
   it("does nothing, and prunes nothing, when no update is pending", async () => {
