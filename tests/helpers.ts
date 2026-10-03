@@ -81,13 +81,22 @@ export async function seedSale(orgId: string) {
 export async function seedPayment(
   orgId: string,
   saleId: string,
-  o: { externalId?: string; status?: string; provider?: string; amountCents?: number } = {},
+  o: {
+    externalId?: string;
+    status?: string;
+    provider?: string;
+    amountCents?: number;
+    method?: "pix" | "card";
+    failureReason?: string;
+  } = {},
 ) {
+  const method = o.method ?? "pix";
   return withOrg(orgId, async (tx) => {
     const [p] = await tx`
-      insert into payments (org_id, sale_id, provider, external_id, status, amount_cents, qr_payload, expires_at)
-      values (${orgId}, ${saleId}, ${o.provider ?? "fake"}, ${o.externalId ?? randomUUID()},
-        ${o.status ?? "pending"}, ${o.amountCents ?? 1000}, 'qr', now() + interval '3 minutes')
+      insert into payments (org_id, sale_id, method, provider, external_id, status, amount_cents, qr_payload, expires_at, failure_reason)
+      values (${orgId}, ${saleId}, ${method}, ${o.provider ?? "fake"}, ${o.externalId ?? randomUUID()},
+        ${o.status ?? "pending"}, ${o.amountCents ?? 1000}, ${method === "pix" ? "qr" : null},
+        now() + interval '3 minutes', ${o.failureReason ?? null})
       returning id`;
     return p.id as string;
   });
