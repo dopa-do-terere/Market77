@@ -1,7 +1,7 @@
 # Market77: fase 2, PDV, venda e Pix
 
 Data: 2026-10-02
-Status: aguardando revisão do usuário
+Status: aprovado em 2026-10-02 e implementado. Atualizado após a revisão final para refletir o comportamento real (seção 11 lista os desvios do texto original)
 Base: `docs/superpowers/specs/2026-10-01-market77-design.md` (seções 2, 4, 5, 6 e 8). Este documento detalha a fase 2 e, onde diverge, prevalece sobre ele (seção 9).
 
 ## 1. Objetivo
@@ -61,11 +61,12 @@ Regras:
 - Quantidade por item: de 1 a 99. Total da venda limitado a R$ 10.000,00 (1.000.000 de centavos); acima disso `sale_too_large`. Evita overflow de `integer` em `total_cents`.
 - `startPayment` exige venda com itens, calcula e congela `total_cents`, cria a cobrança no provedor e a venda vai a `awaiting_payment`. Se já existe pagamento pendente com QR válido, devolve o mesmo QR.
 - Validade do QR: 3 minutos.
-- `confirmPayment` aceita venda em `awaiting_payment`, `open` ou `expired`. Não aceita `cancelled`, e `cancelled` só é alcançável a partir de `open` sem pagamento pendente. Pagamento confirmado nunca é recusado.
-- A confirmação roda em uma transação: `payment` vai a `confirmed`, a venda a `paid` com `paid_at`, e um movimento `sale` negativo por item é inserido com `sale_id`. Saldo negativo é permitido por desenho.
-- Valor pago diferente de `amount_cents`: o `payment` vai a `failed` com o payload guardado, a venda não é paga e nenhum movimento é criado.
-- `refreshSale(tx, saleId, now)` roda em toda leitura e escrita da venda: `open` vencida vira `expired`; `awaiting_payment` consulta o provedor no máximo a cada 10 s (`payments.checked_at`) e, se o provedor ainda disser pendente e o QR estiver vencido, marca o pagamento `expired` e devolve a venda a `open`. O relógio entra como parâmetro `now`.
-- Reconciliação depende de alguém consultar a venda. Uma rota interna `POST /api/internal/reconcile`, chamada por cron, cobre o totem que fechou após pagar; ela é ligada na fase 3, junto com o agente.
+- `confirmPayment` aceita venda em `awaiting_payment`, `open` ou `expired` (pagamento tardio) e nunca o recusa por falta de estoque. Ele recusa, guardando o pagamento como `failed` com o payload (visível ao dono), quatro casos: valor pago diferente do cobrado; venda `cancelled`; venda já `paid` por outro pagamento; valor do pagamento diferente do `total_cents` atual da venda (carrinho editado depois de o QR vencer). Ou seja, um pagamento tardio só confirma se o total congelado não mudou; a comparação é apenas do total, não dos itens. Um pagamento `failed` pode virar `confirmed` se chegar de novo com o valor certo e as condições valerem. `cancelled` só é alcançável a partir de `open`.
+- A confirmação roda em uma transação: `payment` vai a `confirmed`, os demais pagamentos `pending` da mesma venda vão a `expired`, a venda vai a `paid` com `paid_at`, e um movimento `sale` negativo por item é inserido com `sale_id`. Saldo negativo é permitido por desenho. `webhook_payload` guarda `{ paidAmountCents, event }` como objeto jsonb.
+- Ordem de travas em todo o código: linha da venda primeiro, depois as linhas de pagamento. Nenhum caminho trava pagamento antes da venda.
+- `refreshSale(tx, term, saleId, provider, now)` roda em toda leitura da venda: `open` vencida vira `expired`; `awaiting_payment` sem pagamento pendente volta a `open`; com pagamento pendente consulta o provedor no máximo a cada 10 s (`payments.checked_at`): `confirmed` confirma o pagamento; `failed` marca o pagamento `failed` e reabre a venda; `expired`, ou QR vencido sem resposta do provedor, marca o pagamento `expired` e reabre a venda com a janela do carrinho renovada. Se a confirmação feita dentro do refresh for recusada, a venda é reaberta na hora. O relógio entra como parâmetro `now`.
+- Chamadas ao provedor (`createPixCharge`, `getCharge`) têm timeout de 5 s. No início do pagamento o timeout vira `provider_unavailable` (503); na reconciliação conta como "sem resposta" e a venda não trava.
+- Reconciliação por cron: `POST /api/internal/reconcile` fica desligada (404) sem `RECONCILE_SECRET`, exige o cabeçalho `x-reconcile-secret`, visita até 100 vendas `awaiting_payment` das mais antigas e responde `{ visited }`. O agendamento fica para a fase 3.
 
 ## 5. Camada de pagamento
 
@@ -96,15 +97,17 @@ interface PaymentProvider {
 1. `parseWebhook`; assinatura inválida responde 401.
 2. Localiza o pagamento por `(provider, external_id)` com `adminSql`; desconhecido responde 200 e é ignorado.
 3. `confirmPayment` em `withOrg`; pagamento já confirmado é no-op com 200.
-4. Valor divergente: tratamento da seção 4, resposta 200.
+4. Recusa (valor divergente, venda cancelada ou já paga, total alterado): tratamento da seção 4, resultado `rejected`, resposta 200.
+
+Outros resultados: provedor desconhecido na URL responde 404 (`unknown_provider`); corpo inválido, mesmo com assinatura válida, responde 401 (`invalid_webhook`); eventos `expired` e `failed` respondem 200 `ignored` (a reconciliação lê o mesmo estado no provedor).
 
 **Teste de contrato:** `paymentProviderContract(factory)` é uma suíte compartilhada que todo adaptador deve passar. Roda hoje no `fake`; o adaptador real entra na mesma suíte contra o sandbox.
 
 ## 6. API do totem e tela do PDV
 
-Autenticação do totem: `Authorization: Bearer <token>`. `requireTerminal` aplica SHA-256, busca com `adminSql` entre os totens com `revoked_at` nulo e devolve `{ terminalId, orgId, marketId }`; token inválido ou revogado responde 401. A venda precisa pertencer ao totem chamador, senão 404.
+Autenticação do totem: `Authorization: Bearer <token>`. `requireTerminal` aplica SHA-256, busca o totem com `adminSql` e devolve `{ terminalId, orgId, marketId }`. Token ausente ou desconhecido responde 401 `unauthorized`; token de um totem revogado responde 401 `terminal_revoked` (só vale para um token que existe), e o PDV mostra então a tela "Totem desativado". A venda precisa pertencer ao totem chamador, senão 404.
 
-Rotas `/api/pdv/...`, entradas validadas com zod, ids fora do formato UUID respondem 404 (nunca 500), respostas em JSON `{ error, message }` com `message` em português:
+Rotas `/api/pdv/...`, entradas validadas com zod, ids fora do formato UUID respondem 404 (nunca 500), JSON quebrado responde 400, `saleId` vazio responde `invalid_input`, respostas em JSON `{ error, message }` com `message` em português. A tabela de status é: `invalid_input` 400; `unauthorized` e `terminal_revoked` 401; `forbidden` 403; `not_found`, `sale_not_found`, `product_not_found` e `product_inactive` 404; `sale_not_editable` 409; `sale_empty`, `sale_too_large` e `quantity_limit` 422 (o 100º escaneamento do mesmo produto dá `quantity_limit`); `provider_unavailable` 503; erro inesperado 500 genérico. Além das rotas abaixo existe `GET /ping` (valida o token e detecta a volta da rede):
 
 | Rota | Efeito |
 |---|---|
@@ -116,8 +119,9 @@ Rotas `/api/pdv/...`, entradas validadas com zod, ids fora do formato UUID respo
 
 Tela `/pdv`, fora de `/o`, sem login de cliente:
 - Primeira abertura: campo para colar o token do totem, guardado em `localStorage`. Sem token válido só essa tela aparece. O risco de um token em `localStorage` numa tela pública é aceito: o token só abre vendas do próprio mercado e é revogável pelo dono.
-- Telas: inicial, carrinho (itens, mais e menos, total, "Pagar com Pix"), QR com contagem regressiva e código copia e cola, "Obrigado" (volta à inicial em poucos segundos), "QR expirou" (gera novo QR, carrinho preservado) e "Totem indisponível" (API sem resposta; tenta de novo sozinho; sem venda offline).
-- Leitor de código de barras funciona como teclado: um listener na janela acumula as teclas e envia ao receber Enter.
+- Telas: inicial, carrinho (itens, mais e menos, total, "Pagar com Pix"), QR com contagem regressiva e código copia e cola, "Obrigado" (volta à inicial depois de 6 segundos), "QR expirou" (é o próprio carrinho com um aviso; gera novo QR, carrinho preservado), "Totem indisponível" (API sem resposta, inclusive por timeout de 10 s do `fetch`; tenta de novo sozinho; sem venda offline) e "Totem desativado" (token revogado).
+- Se o servidor responde `sale_not_found` ou `sale_not_editable` a um escaneamento com a venda local aberta, o PDV abre uma venda nova. Escaneamentos são serializados e ignorados enquanto se paga.
+- Leitor de código de barras funciona como teclado: um listener na janela acumula as teclas e envia ao receber Enter; o Enter é capturado (`preventDefault`) para não acionar o botão com foco.
 - Manifesto mínimo para ser instalável; sem service worker nem cache offline.
 - Texto da interface em português do Brasil.
 
@@ -129,13 +133,13 @@ Permissões novas em `src/auth/permissions.ts`:
 
 Páginas, todas com `requireOrgPage`; actions com `requireOrg(orgId, ação)` antes de qualquer escrita:
 - `/o/[orgId]/terminals`: lista (nome, mercado, ativo ou revogado), formulário de cadastro (nome e mercado) e revogação. O token em claro aparece uma vez, na resposta da própria action, com aviso de copiar agora; não vai na URL nem é guardado.
-- `/o/[orgId]/sales`: as 50 vendas mais recentes de todos os mercados (data, mercado, total, status, itens). Sem paginação nem filtros.
+- `/o/[orgId]/sales`: as 50 vendas mais recentes de todos os mercados que tenham itens ou algum pagamento (data, mercado, total, status, itens), com "(requer atenção)" nas que têm pagamento `failed`. Sem paginação nem filtros.
 - `/o/[orgId]/sales/[saleId]`: itens com o preço da época e o pagamento. Pagamento `failed` por valor divergente mostra valor esperado e recebido.
 - Dashboard: linha "Vendas hoje: R$ X (N)", calculada por mercado no fuso `markets.timezone`.
 - Página do mercado (fase 1): saldo negativo ganha o rótulo "negativo", além de "(baixo)".
 - Navegação: "Totens" (dono) e "Vendas" (dono e gerente), coerentes com `can()`.
 
-Mensagens novas em `src/lib/messages.ts` (português): `product_not_found`, `product_inactive`, `sale_not_found`, `sale_not_editable`, `sale_empty`, `sale_too_large`, `terminal_revoked`, `payment_failed`.
+Mensagens novas em `src/lib/messages.ts` (português): `unauthorized`, `terminal_revoked`, `product_not_found`, `product_inactive`, `sale_not_found`, `sale_not_editable`, `sale_empty`, `sale_too_large`, `quantity_limit`, `provider_unavailable`, `payment_failed` (esta ainda sem uso).
 
 ## 8. Organização do código
 
