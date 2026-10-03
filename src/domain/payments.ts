@@ -1,3 +1,4 @@
+import type postgres from "postgres";
 import type { Tx } from "@/db/tenant";
 import { AppError } from "@/lib/errors";
 import type { PaymentProvider } from "@/payments/provider";
@@ -65,16 +66,23 @@ export async function confirmPayment(
   const [ref] = await tx`select sale_id from payments where id = ${paymentId}`;
   if (!ref) throw new AppError("not_found");
   // Lock order is always sale, then payment (startPayment locks the sale first too): no deadlock.
-  const [sale] = await tx`select id, status from sales where id = ${ref.sale_id} for update`;
+  const [sale] = await tx`select id, status, total_cents from sales where id = ${ref.sale_id} for update`;
   const [pay] = await tx`select status, amount_cents from payments where id = ${paymentId} for update`;
   if (pay.status === "confirmed") return "already_confirmed";
 
-  const detail = tx.json({ paidAmountCents, event } as never);
-  if (paidAmountCents !== pay.amount_cents || sale.status === "cancelled" || sale.status === "paid") {
+  const detail = tx.json({ paidAmountCents, event } as postgres.JSONValue);
+  // The total is frozen at startPayment; it differs only if the cart was edited after the QR expired.
+  if (
+    paidAmountCents !== pay.amount_cents ||
+    pay.amount_cents !== sale.total_cents ||
+    sale.status === "cancelled" ||
+    sale.status === "paid"
+  ) {
     await tx`update payments set status = 'failed', webhook_payload = ${detail} where id = ${paymentId}`;
     return "rejected";
   }
   await tx`update payments set status = 'confirmed', webhook_payload = ${detail} where id = ${paymentId}`;
+  await tx`update payments set status = 'expired' where sale_id = ${sale.id} and status = 'pending' and id <> ${paymentId}`;
   await tx`update sales set status = 'paid', paid_at = ${now} where id = ${sale.id}`;
   await tx`
     insert into stock_movements (org_id, market_product_id, type, quantity, sale_id)

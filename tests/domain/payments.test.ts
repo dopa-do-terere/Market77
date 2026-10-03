@@ -190,6 +190,51 @@ describe("confirmPayment", () => {
     expect(await balance(r)).toBe(-2);
   });
 
+  it("expires the sibling pending payment when a late payment confirms", async () => {
+    const r = await ready();
+    await pay(r);
+    await pay(r, minutes(4));
+    const [first, second] = await payments(r);
+    expect(await confirm(r, first.id as string)).toBe("confirmed");
+    const after = await payments(r);
+    expect([after[0].status, after[1].status]).toEqual(["confirmed", "expired"]);
+    expect(after[1].id).toBe(second.id);
+    expect(await saleStatus(r)).toBe("paid");
+    expect(await movements(r)).toBe(1);
+  });
+
+  it("rejects a late payment when the cart changed after the QR expired", async () => {
+    const r = await ready();
+    await pay(r);
+    const [p] = await payments(r);
+    await adminSql`update payments set status = 'expired' where id = ${p.id}`;
+    await adminSql`update sales set status = 'open' where id = ${r.saleId}`;
+    await withOrg(r.orgId, (tx) => addItemByBarcode(tx, r.orgId, r.store, { saleId: r.saleId, barcode: BARCODE }, NOW));
+    expect(await confirm(r, p.id as string, 1000)).toBe("rejected");
+    expect((await payments(r))[0].status).toBe("failed");
+    expect(await saleStatus(r)).toBe("open");
+    expect(await movements(r)).toBe(0);
+  });
+
+  it("stores the event and the paid amount when confirming", async () => {
+    const r = await ready();
+    await pay(r);
+    const [p] = await payments(r);
+    await confirm(r, p.id as string);
+    const [row] = await adminSql`select webhook_payload->>'paidAmountCents' as paid from payments where id = ${p.id}`;
+    expect(row.paid).toBe("1000");
+  });
+
+  it("accepts a correct late amount for a payment previously failed by mismatch", async () => {
+    const r = await ready();
+    await pay(r);
+    const [p] = await payments(r);
+    expect(await confirm(r, p.id as string, 999)).toBe("rejected");
+    expect(await confirm(r, p.id as string, 1000)).toBe("confirmed");
+    expect(await saleStatus(r)).toBe("paid");
+    expect(await movements(r)).toBe(1);
+  });
+
   it("answers not_found for an unknown payment", async () => {
     const r = await ready();
     expect(await codeOf(confirm(r, "6f1d3c9e-0000-4000-8000-000000000000"))).toBe("not_found");
