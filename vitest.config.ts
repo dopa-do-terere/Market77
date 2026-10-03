@@ -9,6 +9,7 @@ const env = {
   PIX_PROVIDER: "fake",
   FAKE_PIX_SECRET: "test-fake-secret",
   RECONCILE_SECRET: "test-reconcile-secret",
+  RELEASE_SECRET: "test-release-secret",
 };
 Object.assign(process.env, env);
 

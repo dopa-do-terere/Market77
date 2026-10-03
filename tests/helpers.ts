@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@/lib/errors";
 
 const TABLES = [
+  "terminal_commands", "agent_releases",
   "payments", "sale_items", "sales", "terminals",
   "stock_movements", "market_products", "product_barcodes", "products",
   "markets", "memberships", "sessions", "users", "organizations",
