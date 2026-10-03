@@ -5,7 +5,7 @@ import { migrate } from "../src/db/migrate";
 async function ensureDatabase(): Promise<void> {
   const url = new URL(process.env.DATABASE_URL!);
   const name = url.pathname.slice(1);
-  if (!/^[a-z0-9_]+$/.test(name)) throw new Error(`Unsafe test database name: ${name}`);
+  if (!/^market77_test[a-z0-9_]*$/.test(name)) throw new Error(`Unsafe test database name: ${name}`);
   const root = postgres(new URL("/postgres", url).toString(), { max: 1 });
   try {
     const [row] = await root`select 1 from pg_database where datname = ${name}`;

@@ -27,7 +27,7 @@ export default async function SalesPage({ params }: { params: Promise<{ orgId: s
               <td>{s.marketName}</td>
               <td>{s.itemCount}</td>
               <td>{formatBRL(s.totalCents)}</td>
-              <td>{STATUS_LABEL[s.status] ?? s.status}</td>
+              <td>{STATUS_LABEL[s.status] ?? s.status}{s.needsAttention && <b> (requer atenção)</b>}</td>
             </tr>
           ))}
         </tbody>

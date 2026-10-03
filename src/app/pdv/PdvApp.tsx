@@ -32,6 +32,7 @@ async function call(token: string, method: string, path: string, body?: unknown)
     method,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
   return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
 }

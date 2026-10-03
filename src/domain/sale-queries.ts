@@ -8,6 +8,7 @@ export type SaleListRow = {
   status: string;
   totalCents: number;
   itemCount: number;
+  needsAttention: boolean;
   createdAt: Date;
 };
 
@@ -33,9 +34,11 @@ export type SaleDetail = {
 export async function listRecentSales(tx: Tx, limit = 50): Promise<SaleListRow[]> {
   const rows = await tx`
     select s.id, m.name as market_name, m.timezone, s.status, s.total_cents, s.created_at,
-      (select coalesce(sum(i.quantity), 0)::int from sale_items i where i.sale_id = s.id) as item_count
+      (select coalesce(sum(i.quantity), 0)::int from sale_items i where i.sale_id = s.id) as item_count,
+      exists (select 1 from payments p where p.sale_id = s.id and p.status = 'failed') as needs_attention
     from sales s join markets m on m.id = s.market_id
     where exists (select 1 from sale_items i where i.sale_id = s.id)
+      or exists (select 1 from payments p where p.sale_id = s.id)
     order by s.created_at desc limit ${limit}`;
   return rows.map((r) => ({
     id: r.id as string,
@@ -44,6 +47,7 @@ export async function listRecentSales(tx: Tx, limit = 50): Promise<SaleListRow[]
     status: r.status as string,
     totalCents: r.total_cents as number,
     itemCount: r.item_count as number,
+    needsAttention: r.needs_attention as boolean,
     createdAt: r.created_at as Date,
   }));
 }
@@ -58,7 +62,7 @@ export async function getSaleDetail(tx: Tx, saleId: string): Promise<SaleDetail 
     select product_name, quantity, unit_price_cents from sale_items
     where sale_id = ${saleId} order by product_name, id`;
   const payments = await tx`
-    select id, status, provider, amount_cents, (webhook_payload->>'paidAmountCents')::int as paid_amount_cents, created_at
+    select id, status, provider, amount_cents, (webhook_payload->>'paidAmountCents')::numeric as paid_amount_cents, created_at
     from payments where sale_id = ${saleId} order by created_at, id`;
   return {
     id: s.id as string,
@@ -78,7 +82,7 @@ export async function getSaleDetail(tx: Tx, saleId: string): Promise<SaleDetail 
       status: p.status as string,
       provider: p.provider as string,
       amountCents: p.amount_cents as number,
-      paidAmountCents: (p.paid_amount_cents as number | null) ?? null,
+      paidAmountCents: p.paid_amount_cents == null ? null : Number(p.paid_amount_cents),
       createdAt: p.created_at as Date,
     })),
   };
