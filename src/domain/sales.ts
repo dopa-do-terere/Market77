@@ -98,7 +98,7 @@ async function recalc(tx: Tx, saleId: string, now: Date): Promise<void> {
   await tx`update sales set total_cents = ${total}, expires_at = ${plus(now, CART_TTL_MS)} where id = ${saleId}`;
 }
 
-const Scan = z.object({ saleId: z.string().optional(), barcode: z.string().trim().min(1).max(64) });
+const Scan = z.object({ saleId: z.string().min(1).optional(), barcode: z.string().trim().min(1).max(64) });
 
 /** Adds one unit of the product with this barcode, creating the sale when saleId is absent. */
 export async function addItemByBarcode(

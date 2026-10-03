@@ -38,6 +38,12 @@ describe("cart", () => {
     expect(await salesCount()).toBe(0);
   });
 
+  it("rejects an empty saleId as invalid_input", async () => {
+    const { scan } = await setup();
+    expect(await codeOf(scan(BARCODE, ""))).toBe("invalid_input");
+    expect(await salesCount()).toBe(0);
+  });
+
   it("rejects an inactive product", async () => {
     const { orgId, store, scan } = await setup();
     await seedSellable(orgId, store.marketId, { barcode: "INATIVO-1", active: false });
