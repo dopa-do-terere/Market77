@@ -2,14 +2,23 @@
 import QRCode from "qrcode";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { formatBRL } from "@/lib/money";
+import { paymentNotice } from "@/pdv/notice";
 import { createScanner } from "@/pdv/scanner";
 import { tokenFromHash } from "@/pdv/token";
 
 const TOKEN_KEY = "m77_terminal_token";
 
 type Item = { id: string; productName: string; quantity: number; unitPriceCents: number };
-type Payment = { status: string; qrPayload: string; expiresAt: string } | null;
-type Sale = { id: string; status: string; totalCents: number; items: Item[]; payment: Payment };
+type Payment = { status: string; method: string; qrPayload: string | null; expiresAt: string } | null;
+type PaymentFailure = { method: string; reason: string } | null;
+type Sale = {
+  id: string;
+  status: string;
+  totalCents: number;
+  items: Item[];
+  payment: Payment;
+  paymentFailure: PaymentFailure;
+};
 type Result = { ok: boolean; status: number; data: Partial<Sale> & { error?: string; message?: string } };
 
 const readToken = () => {
@@ -70,6 +79,7 @@ export default function PdvApp() {
   const [qr, setQr] = useState("");
   const [now, setNow] = useState(Date.now());
   const [draft, setDraft] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const saleRef = useRef<Sale | null>(null);
   saleRef.current = sale;
   const scanChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -190,7 +200,10 @@ export default function PdvApp() {
     }
   }, [sale?.status, sale?.id, flash, applySale]);
 
-  const payload = sale?.status === "awaiting_payment" ? sale.payment?.qrPayload : undefined;
+  const payload =
+    sale?.status === "awaiting_payment" && sale.payment?.method !== "card"
+      ? (sale.payment?.qrPayload ?? undefined)
+      : undefined;
   useEffect(() => {
     if (!payload) {
       setQr("");
@@ -220,15 +233,27 @@ export default function PdvApp() {
     else if (r) flash(r.data.message ?? "Erro inesperado.");
   }
 
-  async function startPay() {
+  async function startPay(method: "pix" | "card") {
     if (!sale) return;
     try {
       payingRef.current = true;
-      const r = await run("POST", `/sales/${sale.id}/pay`);
+      const r = await run("POST", `/sales/${sale.id}/pay`, { method });
       if (r?.ok) applySale(r.data as Sale);
       else if (r) flash(r.data.message ?? "Erro inesperado.");
     } finally {
       payingRef.current = false;
+    }
+  }
+
+  async function cancelCardPayment() {
+    if (!sale || cancelling) return;
+    setCancelling(true);
+    try {
+      const r = await run("POST", `/sales/${sale.id}/payment/cancel`);
+      if (r?.ok) applySale(r.data as Sale);
+      else if (r) flash(r.data.message ?? "Erro inesperado.");
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -274,6 +299,21 @@ export default function PdvApp() {
       </Screen>
     );
   }
+  if (sale.status === "awaiting_payment" && sale.payment?.method === "card") {
+    const left = Math.max(0, Math.round((new Date(sale.payment.expiresAt).getTime() - now) / 1000));
+    return (
+      <Screen title={`Pague ${formatBRL(sale.totalCents)} no cartão`}>
+        <p>Siga as instruções na maquininha.</p>
+        <p>
+          Tempo restante: {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
+        </p>
+        {notice && <p role="alert">{notice}</p>}
+        <button style={bigButton} onClick={cancelCardPayment} disabled={cancelling}>
+          Cancelar
+        </button>
+      </Screen>
+    );
+  }
   if (sale.status === "awaiting_payment") {
     const left = Math.max(0, Math.round((new Date(sale.payment?.expiresAt ?? 0).getTime() - now) / 1000));
     return (
@@ -286,7 +326,7 @@ export default function PdvApp() {
   }
   return (
     <Screen title="Seu carrinho">
-      {sale.payment?.status === "expired" && <p role="alert">O QR expirou. Gere um novo para pagar.</p>}
+      {paymentNotice(sale) && <p role="alert">{paymentNotice(sale)}</p>}
       {notice && <p role="alert">{notice}</p>}
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {sale.items.map((i) => (
@@ -306,8 +346,11 @@ export default function PdvApp() {
       <p>
         <strong>Total: {formatBRL(sale.totalCents)}</strong>
       </p>
-      <button style={bigButton} onClick={startPay} disabled={sale.items.length === 0}>
+      <button style={bigButton} onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
         Pagar com Pix
+      </button>
+      <button style={bigButton} onClick={() => startPay("card")} disabled={sale.items.length === 0}>
+        Pagar com cartão
       </button>
       <button style={{ ...bigButton, fontSize: 20 }} onClick={cancel}>
         Cancelar
