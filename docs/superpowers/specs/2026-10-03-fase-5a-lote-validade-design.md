@@ -55,7 +55,7 @@ Sem backfill: os movimentos existentes ficam com `lot_id` nulo e valem como sald
 
 **Bloqueio no totem** (`addItemByBarcode`, `src/domain/sales.ts`): se o produto controla validade, lança `AppError("product_expired")` quando `saldo vencido > 0` e `saldo válido <= 0`, onde saldo válido é a soma dos movimentos com `lot_id` nulo ou em lote não vencido, e saldo vencido é a soma dos movimentos em lotes vencidos. Sem lotes, ou com saldo válido positivo, nada muda. Item já no carrinho não é reavaliado, e pagamento confirmado nunca é bloqueado.
 
-**Alertas** (`src/domain/lots.ts`): `listExpiryAlerts(tx, marketId, now)` devolve os lotes com saldo positivo que vencem em até 7 dias ou já venceram: produto, validade, quantidade, situação (`expired` ou `expiring`). `countExpired(tx, orgId)` para a página inicial.
+**Alertas** (`src/domain/lots.ts`): `listExpiryAlerts(tx, marketId, now)` devolve os lotes com saldo positivo que vencem em até 7 dias ou já venceram: produto, validade, quantidade, situação (`expired` ou `expiring`). A página inicial do dono mostra, por mercado, quantos lotes já venceram (a partir dos mesmos alertas, como já faz com o estoque baixo).
 
 **Mensagem** (`src/lib/messages.ts`): `product_expired`: "Produto vencido. Procure o atendimento." O status HTTP em `src/pdv/http.ts` é 404, como `product_inactive`.
 
@@ -63,7 +63,7 @@ Sem backfill: os movimentos existentes ficam com `lot_id` nulo e valem como sald
 
 - Configuração do produto no mercado: caixa "Controla validade". Desligar mantém os lotes e os ignora; ligar com saldo existente deixa esse saldo como "sem lote".
 - Entrada de estoque (`markets/[marketId]`): campo `<input type="date">` quando o produto controla validade, obrigatório. Perda e ajuste: `<select>` opcional de lote (validade e saldo), em branco usa FEFO.
-- Seção "Validade" no mercado: tabela de `listExpiryAlerts`. A página inicial do dono mostra a contagem de vencidos com link.
+- Seção "Validade" no mercado: tabela de `listExpiryAlerts`. A página inicial do dono mostra a contagem de lotes vencidos por mercado, com link para o mercado.
 - Permissão: a mesma `stock:move` de hoje.
 
 ## 6. Erros e bordas
