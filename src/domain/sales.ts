@@ -19,10 +19,13 @@ export type SaleItemView = {
 export type PaymentView = {
   id: string;
   status: "pending" | "confirmed" | "expired" | "failed";
+  method: "pix" | "card";
   amountCents: number;
-  qrPayload: string;
+  qrPayload: string | null;
   expiresAt: Date;
+  failureReason: "declined" | "cancelled" | "expired" | null;
 };
+export type PaymentFailure = { method: "pix" | "card"; reason: "declined" | "cancelled" | "expired" };
 export type SaleView = {
   id: string;
   status: SaleStatus;
@@ -30,6 +33,7 @@ export type SaleView = {
   expiresAt: Date;
   items: SaleItemView[];
   payment: PaymentView | null;
+  paymentFailure: PaymentFailure | null;
 };
 export type LockedSale = { id: string; status: SaleStatus; expiresAt: Date };
 
@@ -62,8 +66,27 @@ export async function getSaleView(tx: Tx, saleId: string): Promise<SaleView> {
     select id, market_product_id, product_name, quantity, unit_price_cents
     from sale_items where sale_id = ${saleId} order by product_name, id`;
   const [p] = await tx`
-    select id, status, amount_cents, qr_payload, expires_at
+    select id, status, method, amount_cents, qr_payload, expires_at, failure_reason
     from payments where sale_id = ${saleId} order by created_at desc limit 1`;
+  const payment: PaymentView | null = p
+    ? {
+        id: p.id as string,
+        status: p.status as PaymentView["status"],
+        method: p.method as PaymentView["method"],
+        amountCents: p.amount_cents as number,
+        qrPayload: (p.qr_payload as string | null) ?? null,
+        expiresAt: p.expires_at as Date,
+        failureReason: (p.failure_reason as PaymentView["failureReason"]) ?? null,
+      }
+    : null;
+  // Only the last payment of a sale that is back at the cart counts; a rejected confirmation has no reason.
+  const paymentFailure: PaymentFailure | null =
+    payment &&
+    s.status === "open" &&
+    (payment.status === "failed" || payment.status === "expired") &&
+    payment.failureReason
+      ? { method: payment.method, reason: payment.failureReason }
+      : null;
   return {
     id: s.id as string,
     status: s.status as SaleStatus,
@@ -76,16 +99,14 @@ export async function getSaleView(tx: Tx, saleId: string): Promise<SaleView> {
       quantity: i.quantity as number,
       unitPriceCents: i.unit_price_cents as number,
     })),
-    payment: p
-      ? {
-          id: p.id as string,
-          status: p.status as PaymentView["status"],
-          amountCents: p.amount_cents as number,
-          qrPayload: p.qr_payload as string,
-          expiresAt: p.expires_at as Date,
-        }
-      : null,
+    payment,
+    paymentFailure,
   };
+}
+
+/** Puts a sale back at the cart with a fresh inactivity window; the cart is untouched. */
+export async function reopenSale(tx: Tx, saleId: string, now: Date): Promise<void> {
+  await tx`update sales set status = 'open', expires_at = ${plus(now, CART_TTL_MS)} where id = ${saleId}`;
 }
 
 /** Recomputes the total from the items, enforces the cap and renews the inactivity window. */

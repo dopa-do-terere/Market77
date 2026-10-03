@@ -25,3 +25,14 @@ export const COMMAND_STATUS_LABEL: Record<string, string> = {
   succeeded: "Concluído",
   failed: "Falhou",
 };
+
+export const METHOD_LABEL: Record<string, string> = {
+  pix: "Pix",
+  card: "Cartão",
+};
+
+export const FAILURE_LABEL: Record<string, string> = {
+  declined: "Recusado",
+  cancelled: "Cancelado",
+  expired: "Expirado",
+};

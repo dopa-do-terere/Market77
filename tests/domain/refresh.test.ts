@@ -21,7 +21,7 @@ async function awaiting() {
   const item = await seedSellable(orgId, store.marketId, { barcode: BARCODE, priceCents: 500 });
   const sale = await withOrg(orgId, (tx) => addItemByBarcode(tx, orgId, store, { barcode: BARCODE }, NOW));
   const view = await withOrg(orgId, (tx) => startPayment(tx, orgId, store, sale.id, fakeProvider, NOW));
-  const externalId = view.payment!.qrPayload.split("|")[1];
+  const externalId = view.payment!.qrPayload!.split("|")[1];
   const refresh = (now: Date, provider: PaymentProvider = fakeProvider) =>
     withOrg(orgId, (tx) => refreshSale(tx, store, sale.id, provider, now));
   return { orgId, store, item, saleId: sale.id, externalId, refresh };

@@ -24,6 +24,8 @@ export type SaleDetail = {
   payments: {
     id: string;
     status: string;
+    method: string;
+    failureReason: string | null;
     provider: string;
     amountCents: number;
     paidAmountCents: number | null;
@@ -35,7 +37,7 @@ export async function listRecentSales(tx: Tx, limit = 50): Promise<SaleListRow[]
   const rows = await tx`
     select s.id, m.name as market_name, m.timezone, s.status, s.total_cents, s.created_at,
       (select coalesce(sum(i.quantity), 0)::int from sale_items i where i.sale_id = s.id) as item_count,
-      exists (select 1 from payments p where p.sale_id = s.id and p.status = 'failed') as needs_attention
+      exists (select 1 from payments p where p.sale_id = s.id and p.status = 'failed' and p.failure_reason is null) as needs_attention
     from sales s join markets m on m.id = s.market_id
     where exists (select 1 from sale_items i where i.sale_id = s.id)
       or exists (select 1 from payments p where p.sale_id = s.id)
@@ -62,7 +64,8 @@ export async function getSaleDetail(tx: Tx, saleId: string): Promise<SaleDetail 
     select product_name, quantity, unit_price_cents from sale_items
     where sale_id = ${saleId} order by product_name, id`;
   const payments = await tx`
-    select id, status, provider, amount_cents, (webhook_payload->>'paidAmountCents')::numeric as paid_amount_cents, created_at
+    select id, status, method, provider, amount_cents, failure_reason,
+      (webhook_payload->>'paidAmountCents')::numeric as paid_amount_cents, created_at
     from payments where sale_id = ${saleId} order by created_at, id`;
   return {
     id: s.id as string,
@@ -80,6 +83,8 @@ export async function getSaleDetail(tx: Tx, saleId: string): Promise<SaleDetail 
     payments: payments.map((p) => ({
       id: p.id as string,
       status: p.status as string,
+      method: p.method as string,
+      failureReason: (p.failure_reason as string | null) ?? null,
       provider: p.provider as string,
       amountCents: p.amount_cents as number,
       paidAmountCents: p.paid_amount_cents == null ? null : Number(p.paid_amount_cents),
