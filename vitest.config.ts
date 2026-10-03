@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // TEST_DB lets parallel worktrees each use their own database (created on demand by global-setup).
 const db = process.env.TEST_DB ?? "market77_test";
@@ -16,6 +16,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve("src") } },
   test: {
     env,
+    exclude: [...configDefaults.exclude, ".claude/**"], // parallel agent worktrees live there
     globalSetup: ["tests/global-setup.ts"],
     fileParallelism: false, // tests share one database
     hookTimeout: 30000,
