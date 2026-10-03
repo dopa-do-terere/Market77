@@ -1,17 +1,26 @@
 import { requireOrgPage } from "@/auth/guard";
+import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listMarkets } from "@/domain/markets";
+import { salesToday } from "@/domain/sale-queries";
 import { listLowStock } from "@/domain/stock";
+import { formatBRL } from "@/lib/money";
 
 export default async function Dashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
-  await requireOrgPage(orgId, "stock:read");
-  const markets = await withOrg(orgId, async (tx) =>
-    Promise.all((await listMarkets(tx)).map(async (m) => ({ ...m, low: await listLowStock(tx, m.id) }))),
-  );
+  const { role } = await requireOrgPage(orgId, "stock:read");
+  const { markets, today } = await withOrg(orgId, async (tx) => ({
+    markets: await Promise.all((await listMarkets(tx)).map(async (m) => ({ ...m, low: await listLowStock(tx, m.id) }))),
+    today: can(role, "sale:read") ? await salesToday(tx) : null,
+  }));
   return (
     <main>
       <h1>Painel</h1>
+      {today && (
+        <p>
+          Vendas hoje: <strong>{formatBRL(today.totalCents)}</strong> ({today.count})
+        </p>
+      )}
       {markets.length === 0 && <p>Nenhum mercado cadastrado ainda.</p>}
       <ul>
         {markets.map((m) => (
