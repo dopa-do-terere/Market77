@@ -17,9 +17,42 @@ Plataforma SaaS para mercados autônomos. Fase 1: base multi-tenant, catálogo e
 3. Escaneie (o leitor funciona como teclado) e toque em **Pagar com Pix**.
 4. Em desenvolvimento o Pix é simulado. Para "pagar" a cobrança mostrada no QR, use o identificador depois de `FAKEPIX|` do código copia e cola:
    `curl -X POST http://localhost:3000/api/dev/fake-pix/<identificador>/pay`
-5. Variáveis: `PIX_PROVIDER=fake`, `FAKE_PIX_SECRET` (assinatura do webhook simulado) e `RECONCILE_SECRET` (rota `POST /api/internal/reconcile`, que será agendada na fase 3).
+5. Variáveis: `PIX_PROVIDER=fake`, `FAKE_PIX_SECRET` (assinatura do webhook simulado) e `RECONCILE_SECRET` (rota `POST /api/internal/reconcile`, que um agendador deve chamar a cada minuto em produção (veja abaixo)).
 
 O adaptador `fake` e a rota de pagamento simulado recusam funcionar com `NODE_ENV=production`.
+
+## Agente do totem (fase 3)
+
+O agente roda no mini PC (Ubuntu): abre o PDV em tela cheia, envia um heartbeat a cada 30 s e executa os comandos que o dono manda pelo painel (**Totens**: Reiniciar PDV, Reboot, Atualizar agente). O servidor nunca conecta no totem; o agente é quem pergunta.
+
+**Publicar uma versão do agente** (no servidor ou na sua máquina, com `RELEASE_SECRET` no `.env`):
+
+```bash
+npm run agent:release -- 1.0.0 https://seu-servidor
+```
+
+**Instalar em um totem:** cadastre o totem no painel e copie o token. No mini PC:
+
+```bash
+curl -fsSL -H "Authorization: Bearer <token>" https://seu-servidor/api/agent/releases/1.0.0 -o agent.tgz
+mkdir agent && tar -xzf agent.tgz -C agent && cd agent
+sudo ./install.sh https://seu-servidor <token>
+sudo reboot
+```
+
+O instalador coloca Node 22.18+ e o Chromium, cria o usuário `kiosk` (autologin em X11), a regra `sudoers` só para `systemctl reboot`, o serviço `market77-agent` e o `market77-watchdog`, que volta à versão anterior se uma atualização não der heartbeat em 2 minutos.
+
+**Atualizar:** publique uma versão nova com `agent:release` e use **Atualizar agente** no painel. O agente baixa o pacote, confere o SHA-256, troca a versão e reinicia sozinho.
+
+Um totem sem batida há mais de 2 minutos aparece como **offline** (o painel também mostra a contagem). Um comando que fica mais de 10 minutos na fila expira e nunca roda depois.
+
+**Em produção (Firebase App Hosting, Cloud Run ou outra hospedagem sem cron):** agende uma chamada por minuto, por exemplo no Cloud Scheduler:
+
+```bash
+curl -X POST https://seu-servidor/api/internal/reconcile -H "x-reconcile-secret: $RECONCILE_SECRET"
+```
+
+O pacote do agente fica no Postgres (limite de 20 MB). Variáveis novas: `RELEASE_SECRET` (publicar pacote).
 
 ## Testes
 
