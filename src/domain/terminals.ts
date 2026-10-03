@@ -13,9 +13,13 @@ export type TerminalRow = {
   id: string;
   marketId: string;
   marketName: string;
+  timezone: string;
   name: string;
   createdAt: Date;
   revokedAt: Date | null;
+  lastHeartbeatAt: Date | null;
+  agentVersion: string | null;
+  pdvStatus: string | null;
 };
 
 /** The plain token is returned once and never stored: only its SHA-256 is. */
@@ -40,16 +44,21 @@ export async function createTerminal(
 
 export async function listTerminals(tx: Tx): Promise<TerminalRow[]> {
   const rows = await tx`
-    select t.id, t.market_id, m.name as market_name, t.name, t.created_at, t.revoked_at
+    select t.id, t.market_id, m.name as market_name, m.timezone, t.name, t.created_at, t.revoked_at,
+           t.last_heartbeat_at, t.agent_version, t.pdv_status
     from terminals t join markets m on m.id = t.market_id
     order by t.created_at desc`;
   return rows.map((r) => ({
     id: r.id as string,
     marketId: r.market_id as string,
     marketName: r.market_name as string,
+    timezone: r.timezone as string,
     name: r.name as string,
     createdAt: r.created_at as Date,
     revokedAt: (r.revoked_at as Date | null) ?? null,
+    lastHeartbeatAt: (r.last_heartbeat_at as Date | null) ?? null,
+    agentVersion: (r.agent_version as string | null) ?? null,
+    pdvStatus: (r.pdv_status as string | null) ?? null,
   }));
 }
 

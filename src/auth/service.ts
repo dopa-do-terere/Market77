@@ -90,3 +90,11 @@ export async function getMembership(userId: string, orgId: string): Promise<Role
     select role from memberships where user_id = ${userId} and org_id = ${orgId}`;
   return r ? (r.role as Role) : null;
 }
+
+/** E-mails por id de usuário, para telas que mostram quem fez algo. A aplicação não lê `users` por RLS. */
+export async function userEmails(ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const rows = await adminSql`select id, email from users where id in ${adminSql(unique)}`;
+  return new Map(rows.map((r) => [r.id as string, r.email as string]));
+}

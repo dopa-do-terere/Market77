@@ -17,6 +17,10 @@ const MESSAGES: Record<string, string> = {
   quantity_limit: "Quantidade máxima por produto: 99.",
   provider_unavailable: "Pagamento indisponível no momento. Tente novamente.",
   payment_failed: "Pagamento não confirmado.",
+  command_in_progress: "Já existe um comando deste tipo em andamento para este totem.",
+  release_not_found: "Versão do agente não encontrada.",
+  release_exists: "Esta versão do agente já foi publicada.",
+  release_too_large: "O pacote do agente passou do limite de 20 MB.",
 };
 
 export const message = (code: string): string => MESSAGES[code] ?? "Erro inesperado.";
