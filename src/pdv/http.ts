@@ -21,6 +21,10 @@ const STATUS: Record<string, number> = {
   sale_too_large: 422,
   quantity_limit: 422,
   provider_unavailable: 503,
+  command_in_progress: 409,
+  release_not_found: 404,
+  release_exists: 409,
+  release_too_large: 413,
 };
 
 export function errorResponse(e: unknown): Response {
@@ -31,7 +35,7 @@ export function errorResponse(e: unknown): Response {
   return Response.json({ error: "internal", message: message("internal") }, { status: 500 });
 }
 
-async function handle(req: Request, fn: (t: TerminalAuth) => Promise<unknown>): Promise<Response> {
+export async function handle(req: Request, fn: (t: TerminalAuth) => Promise<unknown>): Promise<Response> {
   try {
     return Response.json(await fn(await requireTerminal(req)));
   } catch (e) {
@@ -39,7 +43,7 @@ async function handle(req: Request, fn: (t: TerminalAuth) => Promise<unknown>): 
   }
 }
 
-async function bodyOf(req: Request): Promise<unknown> {
+export async function bodyOf(req: Request): Promise<unknown> {
   try {
     return await req.json();
   } catch {
