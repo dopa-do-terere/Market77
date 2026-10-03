@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
 import { CARD_TTL_MS, cancelPayment, confirmPayment, failPayment, startPayment } from "@/domain/payments";
+import { refreshSale } from "@/domain/refresh";
+import { listRecentSales } from "@/domain/sale-queries";
 import { addItemByBarcode } from "@/domain/sales";
 import { getBalance } from "@/domain/stock";
 import type { CardProvider } from "@/payments/card";
@@ -303,5 +305,71 @@ describe("failPayment", () => {
     const r = await ready();
     expect(await codeOf(fail(r, "00000000-0000-0000-0000-000000000000", "declined"))).toBe("not_found");
     expect(await codeOf(fail(r, "nope", "declined"))).toBe("not_found");
+  });
+});
+
+describe("confirmPayment after other outcomes", () => {
+  const confirm = (r: Ready, id: string, now: Date) =>
+    withOrg(r.orgId, (tx) => confirmPayment(tx, id, 1000, { test: true }, now));
+  const attention = async (r: Ready) => (await withOrg(r.orgId, (tx) => listRecentSales(tx)))[0].needsAttention;
+
+  it("flags a Pix that expired and was paid after the sale was paid by another payment", async () => {
+    const r = await ready();
+    await payPix(r);
+    const later = at(4 * 60_000);
+    await withOrg(r.orgId, (tx) => refreshSale(tx, r.store, r.saleId, fakeProvider, later));
+    const [oldPix] = await rows(r);
+    expect([oldPix.status, oldPix.failure_reason]).toEqual(["expired", "expired"]);
+    const view = await payPix(r, later);
+    expect(await confirm(r, view.payment!.id, at(5 * 60_000))).toBe("confirmed");
+    expect(await confirm(r, oldPix.id as string, at(6 * 60_000))).toBe("rejected");
+    expect((await rows(r)).map((p) => [p.status, p.failure_reason])).toEqual([["failed", null], ["confirmed", null]]);
+    expect(await attention(r)).toBe(true);
+  });
+
+  it("accepts an approval that arrives after a decline while the sale is still open", async () => {
+    const r = await ready();
+    const view = await payCard(r);
+    await withOrg(r.orgId, (tx) => failPayment(tx, view.payment!.id, "declined", at(1000)));
+    expect(await saleStatus(r)).toBe("open");
+    expect(await confirm(r, view.payment!.id, at(2000))).toBe("confirmed");
+    expect((await rows(r)).map((p) => [p.status, p.failure_reason])).toEqual([["confirmed", null]]);
+    expect(await saleStatus(r)).toBe("paid");
+  });
+
+  it("stops a pending card on the machine when the sale is paid by a late Pix", async () => {
+    const r = await ready();
+    await payPix(r);
+    await payCard(r, at(1000));
+    const [pix, card] = await rows(r);
+    const spy = vi.spyOn(fakeCardProvider, "cancelCardCharge");
+    try {
+      expect(await confirm(r, pix.id as string, at(2000))).toBe("confirmed");
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(card.external_id);
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await rows(r)).map((p) => [p.method, p.status, p.failure_reason])).toEqual([
+      ["pix", "confirmed", null],
+      ["card", "expired", null],
+    ]);
+    expect(await fakeCardProvider.getCharge(card.external_id as string)).toMatchObject({ status: "failed" });
+  });
+
+  it("still pays the sale when the machine cannot be told to stop the pending card", async () => {
+    const r = await ready();
+    await payPix(r);
+    await payCard(r, at(1000));
+    const [pix] = await rows(r);
+    const spy = vi.spyOn(fakeCardProvider, "cancelCardCharge").mockRejectedValue(new Error("down"));
+    try {
+      expect(await confirm(r, pix.id as string, at(2000))).toBe("confirmed");
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await saleStatus(r)).toBe("paid");
+    expect((await rows(r)).map((p) => p.status)).toEqual(["confirmed", "expired"]);
   });
 });

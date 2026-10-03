@@ -3,6 +3,7 @@ import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
 import { startPayment } from "@/domain/payments";
 import { CHECK_INTERVAL_MS, refreshSale } from "@/domain/refresh";
+import { listRecentSales } from "@/domain/sale-queries";
 import { addItemByBarcode } from "@/domain/sales";
 import { getBalance } from "@/domain/stock";
 import { buildFakeWebhook, fakeProvider } from "@/payments/fake";
@@ -83,6 +84,15 @@ describe("refreshSale", () => {
     buildFakeWebhook(r.externalId, { status: "failed" });
     const view = await r.refresh(at(CHECK_INTERVAL_MS));
     expect([view.status, view.payment?.status]).toEqual(["open", "failed"]);
+  });
+
+  it("keeps a failed Pix without a reason so the owner sees it needs attention", async () => {
+    const r = await awaiting();
+    buildFakeWebhook(r.externalId, { status: "failed" });
+    await r.refresh(at(CHECK_INTERVAL_MS));
+    const [p] = await adminSql`select status, failure_reason from payments where sale_id = ${r.saleId}`;
+    expect([p.status, p.failure_reason]).toEqual(["failed", null]);
+    expect((await withOrg(r.orgId, (tx) => listRecentSales(tx)))[0].needsAttention).toBe(true);
   });
 
   it("does not crash or confirm when the provider is down", async () => {

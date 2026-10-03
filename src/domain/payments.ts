@@ -160,15 +160,28 @@ export async function confirmPayment(
     sale.status === "cancelled" ||
     sale.status === "paid"
   ) {
-    await tx`update payments set status = 'failed', webhook_payload = ${detail} where id = ${paymentId}`;
+    // No reason: a rejected payment is what "needs attention" means in the owner panel.
+    await tx`update payments set status = 'failed', failure_reason = null, webhook_payload = ${detail} where id = ${paymentId}`;
     return "rejected";
   }
-  await tx`update payments set status = 'confirmed', webhook_payload = ${detail} where id = ${paymentId}`;
-  await tx`update payments set status = 'expired' where sale_id = ${sale.id} and status = 'pending' and id <> ${paymentId}`;
+  await tx`update payments set status = 'confirmed', failure_reason = null, webhook_payload = ${detail} where id = ${paymentId}`;
+  // No failure_reason on the ended ones: a late approval of one of them is rejected and stays flagged.
+  const ended = await tx`
+    update payments set status = 'expired' where sale_id = ${sale.id} and status = 'pending' and id <> ${paymentId}
+    returning method, external_id`;
   await tx`update sales set status = 'paid', paid_at = ${now} where id = ${sale.id}`;
   await tx`
     insert into stock_movements (org_id, market_product_id, type, quantity, sale_id)
     select org_id, market_product_id, 'sale', -quantity, sale_id from sale_items where sale_id = ${sale.id}`;
+  for (const e of ended) {
+    if (e.method !== "card") continue;
+    // ponytail: best-effort stop of the machine, no retry; a charge it still approves is rejected above.
+    try {
+      await withTimeout(getCardProvider().cancelCardCharge(e.external_id as string));
+    } catch {
+      // provider down or unknown: the payment is already ended here
+    }
+  }
   return "confirmed";
 }
 
@@ -195,11 +208,12 @@ export async function cancelPayment(
 }
 
 /**
- * Marks a pending payment failed (declined or cancelled on the machine) or expired, and puts the sale
+ * Marks a pending payment failed (declined or cancelled on the machine; null reason for a Pix the
+ * provider failed, which the owner panel flags) or expired, and puts the sale
  * back at the cart. Only a pending payment changes, so a late or repeated event is harmless and a
  * confirmed payment is never reverted. Returns whether anything changed.
  */
-export async function failPayment(tx: Tx, paymentId: string, reason: FailReason, now: Date): Promise<boolean> {
+export async function failPayment(tx: Tx, paymentId: string, reason: FailReason | null, now: Date): Promise<boolean> {
   if (!isUuid(paymentId)) throw new AppError("not_found");
   const [ref] = await tx`select sale_id from payments where id = ${paymentId}`;
   if (!ref) throw new AppError("not_found");

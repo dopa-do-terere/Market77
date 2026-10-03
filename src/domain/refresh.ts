@@ -53,7 +53,8 @@ export async function refreshSale(
           const result = await confirmPayment(tx, p.id as string, charge.amountCents, { source: "reconcile" }, now);
           if (result === "rejected") await reopenSale(tx, sale.id, now); // the payment was marked failed
         } else if (charge?.status === "failed") {
-          await failPayment(tx, p.id as string, charge.failureReason ?? "declined", now);
+          // A failed Pix keeps no reason, so the owner panel flags it as before.
+          await failPayment(tx, p.id as string, isCard ? (charge.failureReason ?? "declined") : null, now);
         } else if (charge?.status === "expired" || (p.expires_at as Date) <= now) {
           if (!isCard) {
             await failPayment(tx, p.id as string, "expired", now);
