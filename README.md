@@ -1,6 +1,27 @@
-# Market77
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark-bg.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light-bg.png">
+    <img alt="Market77" src="docs/assets/logo-light-bg.png" width="420">
+  </picture>
+</p>
 
-Plataforma SaaS para mercados autônomos. Fase 1: base multi-tenant, catálogo e estoque.
+<p align="center">
+  Plataforma SaaS para mercados autônomos: catálogo, estoque, totem de autoatendimento, Pix e cartão.
+</p>
+
+## O que já existe
+
+| Fase | Entrega |
+|---|---|
+| 1 | Base multi-tenant (Postgres com Row Level Security), catálogo e estoque por livro-razão |
+| 2 | PDV do totem, venda e Pix |
+| 3 | Agente do totem, heartbeat e comandos remotos |
+| 4 | Cartão na maquininha (adaptador simulado) |
+| 5A | Lote e validade (em andamento) |
+| 5B | NFC-e (planejada) |
+
+Stack: Next.js 15, React 19, TypeScript, Postgres 16 (`postgres.js`, migrations em SQL puro), `zod` e `vitest`. Specs e planos de cada fase ficam em `docs/superpowers/`.
 
 ## Rodar localmente
 
