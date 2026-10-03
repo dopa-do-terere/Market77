@@ -129,4 +129,70 @@ describe("browser supervisor", () => {
     expect(e.children).toHaveLength(1);
     expect(b.running()).toBe(false);
   });
+
+  it("two concurrent restarts end with exactly one live child", async () => {
+    const e = fakeEnv();
+    const b = createBrowser(opts, e.deps);
+    b.start();
+    const p1 = b.restart();
+    const p2 = b.restart();
+    e.children[0].exit();
+    await p1;
+    await new Promise((r) => setTimeout(r, 0));
+    e.children[1].exit();
+    await p2;
+    expect(e.children.filter((c) => !c.killed)).toHaveLength(1);
+    expect(b.running()).toBe(true);
+  });
+
+  it("stop during a pending restart leaves no live child", async () => {
+    const e = fakeEnv();
+    const b = createBrowser(opts, e.deps);
+    b.start();
+    const p1 = b.restart();
+    const p2 = b.stop();
+    e.children[0].exit();
+    await Promise.all([p1, p2]);
+    expect(e.children.filter((c) => !c.killed)).toHaveLength(0);
+    expect(b.running()).toBe(false);
+  });
+
+  it("restart leaves no stray timer and the next crash backs off from 1 s", async () => {
+    const e = fakeEnv();
+    const b = createBrowser(opts, e.deps);
+    b.start();
+    const p = b.restart();
+    e.children[0].exit();
+    await p;
+    expect(e.timers.filter((t) => !t.cancelled)).toHaveLength(0);
+    e.children[1].exit();
+    expect(e.timers.at(-1)!.ms).toBe(1000);
+  });
+
+  it("stop and restart cancel a pending retry timer", async () => {
+    const e = fakeEnv();
+    const b = createBrowser(opts, e.deps);
+    b.start();
+    e.children[0].exit();
+    const retry = e.timers.at(-1)!;
+    await b.stop();
+    expect(retry.cancelled).toBe(true);
+    b.start();
+    e.children.at(-1)!.exit();
+    const retry2 = e.timers.at(-1)!;
+    await b.restart();
+    expect(retry2.cancelled).toBe(true);
+    expect(b.running()).toBe(true);
+  });
+
+  it("does not reset the backoff at 59999 ms of uptime", () => {
+    const e = fakeEnv();
+    const b = createBrowser(opts, e.deps);
+    b.start();
+    e.children.at(-1)!.exit();
+    e.fire();
+    e.advance(59_999);
+    e.children.at(-1)!.exit();
+    expect(e.timers.at(-1)!.ms).toBe(2000);
+  });
 });

@@ -26,6 +26,17 @@ export function createBrowser(opts: { command: string; url: string; profileDir: 
   let failures = 0;
   let startedAt = 0;
   let retry: unknown = null;
+  let chain: Promise<void> | null = null; // in-flight stop/restart; later ones queue behind it
+
+  // Runs fn at once when idle (so kill() is synchronous), otherwise after the previous one.
+  function serial(fn: () => Promise<void>): Promise<void> {
+    const p = chain === null ? fn() : chain.then(fn);
+    const tail: Promise<void> = p.catch(() => {}).then(() => {
+      if (chain === tail) chain = null;
+    });
+    chain = tail;
+    return p;
+  }
 
   function launch(): void {
     const c = deps.spawn(opts.command, [
@@ -68,6 +79,7 @@ export function createBrowser(opts: { command: string; url: string; profileDir: 
         resolve();
       };
       old.on("exit", done);
+      // no SIGKILL after the wait: we give up and move on, a stuck process is left to the OS
       timer = deps.schedule(done, KILL_WAIT_MS);
       old.kill();
     });
@@ -79,15 +91,17 @@ export function createBrowser(opts: { command: string; url: string; profileDir: 
       failures = 0;
       if (child === null) launch();
     },
-    async stop() {
+    stop() {
       wanted = false;
-      await stopChild();
+      return serial(stopChild);
     },
-    async restart() {
+    restart() {
       wanted = true;
       failures = 0;
-      await stopChild();
-      launch();
+      return serial(async () => {
+        await stopChild();
+        if (wanted && child === null) launch(); // stop() may have landed while we waited
+      });
     },
     running: () => child !== null,
   };
