@@ -6,7 +6,7 @@ import { AppError } from "@/lib/errors";
 const TABLES = [
   "terminal_commands", "agent_releases",
   "payments", "sale_items", "sales", "terminals",
-  "stock_movements", "market_products", "product_barcodes", "products",
+  "stock_lots", "stock_movements", "market_products", "product_barcodes", "products",
   "markets", "memberships", "sessions", "users", "organizations",
 ];
 
@@ -100,6 +100,31 @@ export async function seedPayment(
       returning id`;
     return p.id as string;
   });
+}
+
+/** Turns on expiry control for a market product. */
+export async function track(marketProductId: string): Promise<void> {
+  await adminSql`update market_products set tracks_expiry = true where id = ${marketProductId}`;
+}
+
+/** Creates (or reuses) the lot of this date and, when quantity is not zero, books an entry into it. */
+export async function addLot(
+  orgId: string,
+  marketProductId: string,
+  expiresOn: string,
+  quantity: number,
+): Promise<string> {
+  const [l] = await adminSql`
+    insert into stock_lots (org_id, market_product_id, expires_on)
+    values (${orgId}, ${marketProductId}, ${expiresOn})
+    on conflict (market_product_id, expires_on) do update set expires_on = excluded.expires_on
+    returning id`;
+  if (quantity !== 0) {
+    await adminSql`
+      insert into stock_movements (org_id, market_product_id, type, quantity, lot_id)
+      values (${orgId}, ${marketProductId}, 'in', ${quantity}, ${l.id})`;
+  }
+  return l.id as string;
 }
 
 export async function codeOf(p: Promise<unknown>): Promise<string | undefined> {
