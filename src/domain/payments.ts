@@ -40,21 +40,21 @@ async function endPending(
   const externalId = p.external_id as string;
   if (p.method === "card") {
     const provider = cardProviderOrThrow(card);
+    // Always ask the machine, even after the charge ran out: an approval whose webhook is late must win.
     let approvedCents: number | null = null;
-    if (stillValid) {
+    try {
+      let stopped = true;
       try {
         await withTimeout(provider.cancelCardCharge(externalId));
-        const c = await withTimeout(provider.getCharge(externalId));
-        if (c.status === "confirmed") approvedCents = c.amountCents;
-      } catch {
-        throw new AppError("provider_unavailable");
+      } catch (e) {
+        if (stillValid) throw e;
+        stopped = false; // tolerable for a run-out charge, as long as the machine is no longer waiting
       }
-    } else {
-      try {
-        await withTimeout(provider.cancelCardCharge(externalId)); // best effort: the charge ran out anyway
-      } catch {
-        // nothing to undo
-      }
+      const c = await withTimeout(provider.getCharge(externalId));
+      if (!stopped && c.status === "pending") throw new Error("machine still waiting");
+      if (c.status === "confirmed") approvedCents = c.amountCents;
+    } catch {
+      throw new AppError("provider_unavailable");
     }
     if (approvedCents !== null) {
       const result = await confirmPayment(tx, p.id as string, approvedCents, { source: "cancel" }, now);

@@ -100,6 +100,26 @@ describe("startPayment with card", () => {
     expect(await saleStatus(r)).toBe("awaiting_payment");
   });
 
+  it("switching method after the card ran out pays the sale when the machine had approved late", async () => {
+    const r = await ready();
+    await payCard(r);
+    const [card] = await rows(r);
+    buildFakeCardWebhook(card.external_id as string, { status: "confirmed" });
+    const view = await payPix(r, at(CARD_TTL_MS + 1000));
+    expect(view.status).toBe("paid");
+    expect((await rows(r)).map((p) => [p.method, p.status])).toEqual([["card", "confirmed"]]);
+    expect(await balance(r)).toBe(-2);
+  });
+
+  it("issuing a new card charge after the old one ran out pays instead when the old one was approved", async () => {
+    const r = await ready();
+    await payCard(r);
+    const [card] = await rows(r);
+    buildFakeCardWebhook(card.external_id as string, { status: "confirmed" });
+    expect((await payCard(r, at(CARD_TTL_MS + 1000))).status).toBe("paid");
+    expect(await rows(r)).toHaveLength(1);
+  });
+
   it("answers provider_unavailable when the charge cannot be created, leaving the cart open", async () => {
     const r = await ready();
     const broken = down({ createCardCharge: async () => { throw new Error("down"); } });
@@ -181,6 +201,40 @@ describe("cancelPayment", () => {
     expect(view.status).toBe("paid");
     expect((await rows(r)).map((p) => p.status)).toEqual(["confirmed"]);
     expect(await balance(r)).toBe(-2);
+  });
+
+  it("pays the sale when the machine approved just before the charge ran out and the webhook is late", async () => {
+    const r = await ready();
+    await payCard(r);
+    const [card] = await rows(r);
+    buildFakeCardWebhook(card.external_id as string, { status: "confirmed" });
+    expect((await cancel(r, at(CARD_TTL_MS + 1000))).status).toBe("paid");
+    expect((await rows(r)).map((p) => p.status)).toEqual(["confirmed"]);
+    expect(await balance(r)).toBe(-2);
+  });
+
+  it("ends a run-out charge the machine did not approve as expired", async () => {
+    const r = await ready();
+    await payCard(r);
+    expect((await cancel(r, at(CARD_TTL_MS + 1000))).status).toBe("open");
+    expect((await rows(r)).map((p) => [p.status, p.failure_reason])).toEqual([["expired", "expired"]]);
+  });
+
+  it("keeps a run-out charge pending when the machine cannot be asked about it", async () => {
+    const r = await ready();
+    await payCard(r);
+    const broken = down({ getCharge: async () => { throw new Error("down"); } });
+    expect(await codeOf(cancel(r, at(CARD_TTL_MS + 1000), broken))).toBe("provider_unavailable");
+    expect((await rows(r)).map((p) => p.status)).toEqual(["pending"]);
+    expect(await saleStatus(r)).toBe("awaiting_payment");
+  });
+
+  it("keeps a run-out charge pending when it cannot be stopped and still waits on the machine", async () => {
+    const r = await ready();
+    await payCard(r);
+    const broken = down({ cancelCardCharge: async () => { throw new Error("down"); } });
+    expect(await codeOf(cancel(r, at(CARD_TTL_MS + 1000), broken))).toBe("provider_unavailable");
+    expect((await rows(r)).map((p) => p.status)).toEqual(["pending"]);
   });
 
   it("reopens a sale whose pending payment is already gone", async () => {
