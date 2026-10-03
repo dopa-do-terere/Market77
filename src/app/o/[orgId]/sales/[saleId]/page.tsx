@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireOrgPage } from "@/auth/guard";
 import { withOrg } from "@/db/tenant";
 import { getSaleDetail } from "@/domain/sale-queries";
-import { PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { FAILURE_LABEL, METHOD_LABEL, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { formatBRL } from "@/lib/money";
 
 export default async function SaleDetailPage({ params }: { params: Promise<{ orgId: string; saleId: string }> }) {
@@ -32,9 +32,13 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ org
       <ul>
         {sale.payments.map((p) => (
           <li key={p.id}>
-            {PAYMENT_LABEL[p.status] ?? p.status}: esperado {formatBRL(p.amountCents)}
+            {METHOD_LABEL[p.method] ?? p.method}, {PAYMENT_LABEL[p.status] ?? p.status}
+            {p.failureReason && <> ({FAILURE_LABEL[p.failureReason] ?? p.failureReason})</>}: esperado{" "}
+            {formatBRL(p.amountCents)}
             {p.paidAmountCents !== null && <>, recebido {formatBRL(p.paidAmountCents)}</>}
-            {p.status === "failed" && <strong> (requer atenção: verifique com o provedor)</strong>}
+            {p.status === "failed" && !p.failureReason && (
+              <strong> (requer atenção: verifique com o provedor)</strong>
+            )}
           </li>
         ))}
       </ul>
