@@ -32,4 +32,12 @@ describe("agent scripts", () => {
     const r = install("https://x.com", TOKEN);
     expect([r.status, r.stderr]).toEqual([1, expect.stringMatching(/root/)]);
   });
+
+  it("agent:release refuses a plain http server before building or sending anything", () => {
+    const r = spawnSync("npx", ["tsx", "scripts/agent-release.ts", "1.0.0", "http://example.com"], {
+      encoding: "utf8",
+      env: { ...process.env, RELEASE_SECRET: "x" },
+    });
+    expect([r.status, r.stderr]).toEqual([1, expect.stringMatching(/https/)]);
+  });
 });

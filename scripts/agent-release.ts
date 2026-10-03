@@ -8,6 +8,10 @@ async function main() {
     console.error("usage: npm run agent:release -- <version> <server-url>   (RELEASE_SECRET comes from .env)");
     process.exit(1);
   }
+  if (!/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)([:/]|$))/.test(server)) {
+    console.error("the server url must be https:// (http only for localhost)");
+    process.exit(1);
+  }
   const body = await buildAgentTarball(version);
   const res = await fetch(`${server.replace(/\/+$/, "")}/api/internal/releases`, {
     method: "POST",
@@ -17,4 +21,7 @@ async function main() {
   console.log(res.status, await res.text());
   process.exit(res.ok ? 0 : 1);
 }
-main();
+main().catch((e) => {
+  console.error(String(e));
+  process.exit(1);
+});

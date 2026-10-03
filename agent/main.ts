@@ -28,7 +28,8 @@ const browser = createBrowser(
   {
     command: config.browserCommand,
     url: `${config.serverUrl}/pdv#token=${config.token}`,
-    profileDir: join(homedir(), ".config", "market77-pdv"),
+    // Not hidden on purpose: the snap Chromium (Ubuntu default) cannot write dotdirs in $HOME (snap home interface).
+    profileDir: join(homedir(), "market77-pdv"),
   },
   {
     spawn: (command, args) => {

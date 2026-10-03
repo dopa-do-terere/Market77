@@ -16,6 +16,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=/opt/market77
 [ -f "$SRC/main.ts" ] && [ -f "$SRC/VERSION" ] || { echo "run it from the extracted release folder" >&2; exit 1; }
 VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
+[[ "$VERSION" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || { echo "bad VERSION" >&2; exit 1; }
 
 # Node 22.18+ runs .ts files directly: the agent has no build step.
 if ! command -v node >/dev/null 2>&1 \
@@ -25,6 +26,7 @@ if ! command -v node >/dev/null 2>&1 \
 fi
 apt-get install -y chromium-browser
 node "$SRC/main.ts" --check >/dev/null
+NODE_BIN="$(command -v node)"
 
 id kiosk >/dev/null 2>&1 || useradd -m -s /bin/bash kiosk
 KIOSK_UID="$(id -u kiosk)"
@@ -32,20 +34,28 @@ KIOSK_UID="$(id -u kiosk)"
 mkdir -p "$BASE/releases"
 rm -rf "$BASE/releases/$VERSION"
 cp -r "$SRC" "$BASE/releases/$VERSION"
+# A stale marker from an earlier update would make the watchdog roll the fresh install back.
+rm -f "$BASE/pending-update"
 ln -sfn "releases/$VERSION" "$BASE/current"
-(umask 077; printf '{"serverUrl":"%s","token":"%s"}\n' "$SERVER" "$TOKEN" > "$BASE/config.json")
+TMP="$(umask 077; mktemp)"
+printf '{"serverUrl":"%s","token":"%s"}\n' "$SERVER" "$TOKEN" > "$TMP"
+install -m 600 -o kiosk -g kiosk "$TMP" "$BASE/config.json"
+rm -f "$TMP"
 chown -R kiosk:kiosk "$BASE"
 
 # The watchdog runs as root and lives outside the releases the agent can replace.
 install -m 755 -o root -g root "$SRC/watchdog.sh" /usr/local/sbin/market77-watchdog
 
 # The kiosk user may reboot the machine, and nothing else.
-echo 'kiosk ALL=(root) NOPASSWD: /usr/bin/systemctl reboot' > /etc/sudoers.d/market77
-chmod 440 /etc/sudoers.d/market77
-visudo -cf /etc/sudoers.d/market77 >/dev/null || { rm -f /etc/sudoers.d/market77; echo "invalid sudoers rule" >&2; exit 1; }
+SUDOERS_TMP="$(umask 077; mktemp)"
+echo 'kiosk ALL=(root) NOPASSWD: /usr/bin/systemctl reboot' > "$SUDOERS_TMP"
+visudo -cf "$SUDOERS_TMP" >/dev/null || { rm -f "$SUDOERS_TMP"; echo "invalid sudoers rule" >&2; exit 1; }
+install -m 440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/market77
+rm -f "$SUDOERS_TMP"
 
 # Ubuntu defaults to Wayland; the kiosk needs an X11 autologin session.
 if [ -f /etc/gdm3/custom.conf ]; then
+  grep -q '^\[daemon\]' /etc/gdm3/custom.conf || printf '\n[daemon]\n' >> /etc/gdm3/custom.conf
   sed -i '/^AutomaticLoginEnable=/d;/^AutomaticLogin=/d;/^WaylandEnable=/d' /etc/gdm3/custom.conf
   sed -i '/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin=kiosk\nWaylandEnable=false' /etc/gdm3/custom.conf
 else
@@ -62,7 +72,7 @@ Wants=network-online.target
 User=kiosk
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/run/user/$KIOSK_UID/gdm/Xauthority
-ExecStart=/usr/bin/node /opt/market77/current/main.ts
+ExecStart=$NODE_BIN /opt/market77/current/main.ts
 Restart=always
 RestartSec=5
 
