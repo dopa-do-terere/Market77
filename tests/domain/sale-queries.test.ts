@@ -5,7 +5,7 @@ import { confirmPayment, startPayment } from "@/domain/payments";
 import { getSaleDetail, listRecentSales, salesToday } from "@/domain/sale-queries";
 import { addItemByBarcode } from "@/domain/sales";
 import { fakeProvider } from "@/payments/fake";
-import { makeOrg, resetDb, seedSellable, seedStore } from "../helpers";
+import { makeOrg, resetDb, seedPayment, seedSale, seedSellable, seedStore } from "../helpers";
 
 beforeEach(resetDb);
 
@@ -43,6 +43,18 @@ describe("listRecentSales", () => {
     expect(await withOrg(orgId, (tx) => listRecentSales(tx, 1))).toHaveLength(1);
   });
 
+  it("lists an itemless sale that has a payment and flags failed ones, but not one with neither", async () => {
+    const { orgId, store } = await setup();
+    await sold(orgId, store, "B-1");
+    const failed = await seedSale(orgId);
+    await seedPayment(orgId, failed.saleId, { status: "failed" });
+    await seedSale(orgId); // no items, no payments
+    const all = await withOrg(orgId, (tx) => listRecentSales(tx));
+    expect(all).toHaveLength(2);
+    expect(all.find((r) => r.id === failed.saleId)?.needsAttention).toBe(true);
+    expect(all.filter((r) => r.id !== failed.saleId).map((r) => r.needsAttention)).toEqual([false]);
+  });
+
   it("does not list another tenant's sales", async () => {
     const a = await setup();
     const b = await setup();
@@ -60,6 +72,15 @@ describe("getSaleDetail", () => {
     const d = await withOrg(orgId, (tx) => getSaleDetail(tx, id));
     expect(d?.items).toEqual([{ productName: "Água", quantity: 1, unitPriceCents: 500 }]);
     expect(d?.payments.map((p) => [p.status, p.amountCents, p.paidAmountCents])).toEqual([["failed", 500, 499]]);
+  });
+
+  it("does not overflow on a huge provider-reported amount", async () => {
+    const { orgId, store } = await setup();
+    const id = await sold(orgId, store, "B-1");
+    await withOrg(orgId, (tx) => startPayment(tx, orgId, store, id, fakeProvider, NOW));
+    await adminSql`update payments set webhook_payload = '{"paidAmountCents": 99999999999}'::jsonb where sale_id = ${id}`;
+    const d = await withOrg(orgId, (tx) => getSaleDetail(tx, id));
+    expect(d?.payments[0].paidAmountCents).toBe(99999999999);
   });
 
   it("returns null for a malformed id and for another tenant's sale", async () => {
