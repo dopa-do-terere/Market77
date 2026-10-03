@@ -14,7 +14,10 @@ const reqWith = (token?: string) =>
 
 async function setup() {
   const orgId = await makeOrg("A");
-  const { marketId } = await seedStore(orgId);
+  const marketId = await withOrg(orgId, async (tx) => {
+    const [m] = await tx`insert into markets (org_id, name) values (${orgId}, 'Loja') returning id`;
+    return m.id as string;
+  });
   const made = await withOrg(orgId, (tx) => createTerminal(tx, orgId, { marketId, name: "Totem 1" }));
   return { orgId, marketId, ...made };
 }

@@ -42,7 +42,10 @@ export async function makeUser(email: string): Promise<string> {
 export async function seedStore(orgId: string) {
   return withOrg(orgId, async (tx) => {
     const [m] = await tx`insert into markets (org_id, name) values (${orgId}, 'Loja') returning id`;
-    return { marketId: m.id as string };
+    const [t] = await tx`
+      insert into terminals (org_id, market_id, name, token_hash)
+      values (${orgId}, ${m.id}, 'Totem', ${randomUUID()}) returning id`;
+    return { marketId: m.id as string, terminalId: t.id as string };
   });
 }
 
@@ -65,16 +68,13 @@ export async function seedSellable(
 
 export async function seedSale(orgId: string) {
   const store = await seedStore(orgId);
-  const result = await withOrg(orgId, async (tx) => {
-    const [t] = await tx`
-      insert into terminals (org_id, market_id, name, token_hash)
-      values (${orgId}, ${store.marketId}, 'Totem', ${randomUUID()}) returning id`;
+  const saleId = await withOrg(orgId, async (tx) => {
     const [s] = await tx`
       insert into sales (org_id, market_id, terminal_id, expires_at)
-      values (${orgId}, ${store.marketId}, ${t.id}, now() + interval '5 minutes') returning id`;
-    return { terminalId: t.id as string, saleId: s.id as string };
+      values (${orgId}, ${store.marketId}, ${store.terminalId}, now() + interval '5 minutes') returning id`;
+    return s.id as string;
   });
-  return { ...store, ...result };
+  return { ...store, saleId };
 }
 
 export async function seedPayment(

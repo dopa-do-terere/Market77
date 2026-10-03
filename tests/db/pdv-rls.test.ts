@@ -25,14 +25,10 @@ describe("phase 2 schema", () => {
     const b = await makeOrg("B");
     const mine = await seedStore(a);
     const theirs = await seedStore(b);
-    const theirTerminalId = await withOrg(b, async (tx) => {
-      const [t] = await tx`insert into terminals (org_id, market_id, name, token_hash) values (${b}, ${theirs.marketId}, 'T', ${require('node:crypto').randomUUID()}) returning id`;
-      return t.id as string;
-    });
     await expect(
       withOrg(a, (tx) => tx`
         insert into sales (org_id, market_id, terminal_id, expires_at)
-        values (${a}, ${mine.marketId}, ${theirTerminalId}, now())`),
+        values (${a}, ${mine.marketId}, ${theirs.terminalId}, now())`),
     ).rejects.toThrow(/foreign key/);
   });
 
