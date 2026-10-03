@@ -12,3 +12,16 @@ export const PAYMENT_LABEL: Record<string, string> = {
   expired: "Expirado",
   failed: "Falhou",
 };
+
+export const COMMAND_LABEL: Record<string, string> = {
+  restart_pdv: "Reiniciar PDV",
+  reboot: "Reboot",
+  update: "Atualizar agente",
+};
+
+export const COMMAND_STATUS_LABEL: Record<string, string> = {
+  pending: "Na fila",
+  delivered: "Enviado ao totem",
+  succeeded: "Concluído",
+  failed: "Falhou",
+};
