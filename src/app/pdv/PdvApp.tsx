@@ -70,10 +70,19 @@ export default function PdvApp() {
   const [draft, setDraft] = useState("");
   const saleRef = useRef<Sale | null>(null);
   saleRef.current = sale;
+  const scanChainRef = useRef<Promise<void>>(Promise.resolve());
+  const payingRef = useRef(false);
+  const flashTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const applySale = useCallback((s: Sale | null) => {
+    saleRef.current = s;
+    setSale(s);
+  }, []);
 
   const flash = useCallback((text: string) => {
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     setNotice(text);
-    setTimeout(() => setNotice(""), 4000);
+    flashTimeoutRef.current = setTimeout(() => setNotice(""), 4000);
   }, []);
 
   useEffect(() => setToken(readToken()), []);
@@ -108,39 +117,48 @@ export default function PdvApp() {
 
   const scan = useCallback(
     async (barcode: string) => {
-      const cur = saleRef.current;
-      if (cur && cur.status !== "open") return; // paying: ignore scans
-      let r = await run("POST", "/sales/items", { saleId: cur?.id, barcode });
-      if (cur && (r?.data.error === "sale_not_found" || r?.data.error === "sale_not_editable")) {
-        r = await run("POST", "/sales/items", { barcode }); // the cart is gone on the server: start a new one
+      try {
+        const cur = saleRef.current;
+        if (payingRef.current || (cur && cur.status !== "open")) return; // paying or not open: ignore scans
+        let r = await run("POST", "/sales/items", { saleId: cur?.id, barcode });
+        if (cur && (r?.data.error === "sale_not_found" || r?.data.error === "sale_not_editable")) {
+          r = await run("POST", "/sales/items", { barcode }); // the cart is gone on the server: start a new one
+        }
+        if (!r) return;
+        if (r.ok) applySale(r.data as Sale);
+        else flash(r.data.message ?? "Erro inesperado.");
+      } catch {
+        // scan must not throw
       }
-      if (!r) return;
-      if (r.ok) setSale(r.data as Sale);
-      else flash(r.data.message ?? "Erro inesperado.");
     },
-    [run, flash],
+    [run, flash, applySale],
   );
 
   useEffect(() => {
     if (!token || offline || revoked) return;
-    const feed = createScanner((code) => void scan(code));
-    const onKey = (e: KeyboardEvent) => feed(e.key, Date.now());
+    const feed = createScanner((code) => {
+      scanChainRef.current = scanChainRef.current.then(() => scan(code));
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") e.preventDefault();
+      feed(e.key, Date.now());
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [token, offline, revoked, scan]);
 
   const saleId = sale?.id;
   useEffect(() => {
-    if (!token || !saleId || revoked) return;
+    if (!token || !saleId || revoked || sale?.status === "paid") return;
     const id = setInterval(async () => {
       const cur = saleRef.current;
       if (!cur) return;
       const r = await run("GET", `/sales/${cur.id}`);
-      if (r?.ok) setSale(r.data as Sale);
-      else if (r?.status === 404) setSale(null);
+      if (r?.ok) applySale(r.data as Sale);
+      else if (r?.status === 404) applySale(null);
     }, 2000);
     return () => clearInterval(id);
-  }, [token, saleId, revoked, run]);
+  }, [token, saleId, revoked, sale?.status, run, applySale]);
 
   useEffect(() => {
     if (!offline) return;
@@ -151,14 +169,14 @@ export default function PdvApp() {
   useEffect(() => {
     if (!sale) return;
     if (sale.status === "paid") {
-      const t = setTimeout(() => setSale(null), 6000);
+      const t = setTimeout(() => applySale(null), 6000);
       return () => clearTimeout(t);
     }
     if (sale.status === "expired" || sale.status === "cancelled") {
       if (sale.status === "expired") flash("Carrinho encerrado por inatividade.");
-      setSale(null);
+      applySale(null);
     }
-  }, [sale, flash]);
+  }, [sale?.status, sale?.id, flash, applySale]);
 
   const payload = sale?.status === "awaiting_payment" ? sale.payment?.qrPayload : undefined;
   useEffect(() => {
@@ -186,21 +204,26 @@ export default function PdvApp() {
   async function changeQuantity(item: Item, delta: number) {
     if (!sale) return;
     const r = await run("PATCH", `/sales/${sale.id}/items/${item.id}`, { quantity: item.quantity + delta });
-    if (r?.ok) setSale(r.data as Sale);
+    if (r?.ok) applySale(r.data as Sale);
     else if (r) flash(r.data.message ?? "Erro inesperado.");
   }
 
   async function startPay() {
     if (!sale) return;
-    const r = await run("POST", `/sales/${sale.id}/pay`);
-    if (r?.ok) setSale(r.data as Sale);
-    else if (r) flash(r.data.message ?? "Erro inesperado.");
+    try {
+      payingRef.current = true;
+      const r = await run("POST", `/sales/${sale.id}/pay`);
+      if (r?.ok) applySale(r.data as Sale);
+      else if (r) flash(r.data.message ?? "Erro inesperado.");
+    } finally {
+      payingRef.current = false;
+    }
   }
 
   async function cancel() {
     if (!sale) return;
     await run("POST", `/sales/${sale.id}/cancel`);
-    setSale(null);
+    applySale(null);
   }
 
   if (token === undefined) return null;
