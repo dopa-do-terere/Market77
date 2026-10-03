@@ -2,8 +2,11 @@ export const ROLES = ["owner", "manager", "restocker"] as const;
 export type Role = (typeof ROLES)[number];
 
 const MATRIX = {
-  owner: ["member:write", "market:write", "product:write", "price:write", "stock:move", "stock:read", "catalog:read"],
-  manager: ["product:write", "price:write", "stock:move", "stock:read", "catalog:read"],
+  owner: [
+    "member:write", "market:write", "product:write", "price:write", "stock:move", "stock:read",
+    "catalog:read", "terminal:write", "sale:read",
+  ],
+  manager: ["product:write", "price:write", "stock:move", "stock:read", "catalog:read", "sale:read"],
   restocker: ["stock:move", "stock:read", "catalog:read"],
 } as const;
 

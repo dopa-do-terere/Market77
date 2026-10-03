@@ -6,6 +6,17 @@ const MESSAGES: Record<string, string> = {
   not_found: "Item não encontrado.",
   already_member: "Este usuário já faz parte da organização.",
   forbidden: "Você não tem permissão para isso.",
+  unauthorized: "Totem não autorizado.",
+  terminal_revoked: "Totem desativado. Procure o responsável.",
+  product_not_found: "Produto não cadastrado.",
+  product_inactive: "Produto indisponível neste mercado.",
+  sale_not_found: "Venda não encontrada.",
+  sale_not_editable: "Esta venda não pode mais ser alterada.",
+  sale_empty: "Adicione ao menos um produto.",
+  sale_too_large: "O valor da compra passou do limite de R$ 10.000,00.",
+  quantity_limit: "Quantidade máxima por produto: 99.",
+  provider_unavailable: "Pagamento indisponível no momento. Tente novamente.",
+  payment_failed: "Pagamento não confirmado.",
 };
 
 export const message = (code: string): string => MESSAGES[code] ?? "Erro inesperado.";

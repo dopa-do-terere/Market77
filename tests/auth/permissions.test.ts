@@ -22,3 +22,17 @@ describe("can", () => {
     expect(can("restocker", "product:write")).toBe(false);
   });
 });
+
+describe("phase 2 permissions", () => {
+  it("lets only the owner manage terminals", () => {
+    expect(can("owner", "terminal:write")).toBe(true);
+    expect(can("manager", "terminal:write")).toBe(false);
+    expect(can("restocker", "terminal:write")).toBe(false);
+  });
+
+  it("lets the owner and the manager read sales, not the restocker", () => {
+    expect(can("owner", "sale:read")).toBe(true);
+    expect(can("manager", "sale:read")).toBe(true);
+    expect(can("restocker", "sale:read")).toBe(false);
+  });
+});
