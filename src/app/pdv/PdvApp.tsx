@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { formatBRL } from "@/lib/money";
 import { createScanner } from "@/pdv/scanner";
+import { tokenFromHash } from "@/pdv/token";
 
 const TOKEN_KEY = "m77_terminal_token";
 
@@ -86,7 +87,17 @@ export default function PdvApp() {
     flashTimeoutRef.current = setTimeout(() => setNotice(""), 4000);
   }, []);
 
-  useEffect(() => setToken(readToken()), []);
+  useEffect(() => {
+    // The totem agent opens /pdv#token=...: keep the token and clean the address bar.
+    const fromAgent = tokenFromHash(window.location.hash);
+    if (fromAgent) {
+      saveToken(fromAgent);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      setToken(fromAgent);
+      return;
+    }
+    setToken(readToken());
+  }, []);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
