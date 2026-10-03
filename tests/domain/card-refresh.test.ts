@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
 import { CARD_TTL_MS, startPayment } from "@/domain/payments";
@@ -12,6 +12,7 @@ import { reconcilePending } from "@/payments/reconcile";
 import { makeOrg, resetDb, seedSellable, seedStore } from "../helpers";
 
 beforeEach(resetDb);
+afterEach(() => vi.unstubAllEnvs());
 
 const NOW = new Date("2026-10-03T12:00:00Z");
 const at = (ms: number) => new Date(NOW.getTime() + ms);
@@ -93,6 +94,49 @@ describe("refreshSale with a card payment", () => {
     expect(calls.cancel).toBe(1);
   });
 
+  it("pays the sale when the machine approves while the cancel is a no-op at expiry", async () => {
+    const r = await awaiting("card");
+    const card: CardProvider = {
+      ...fakeCardProvider,
+      cancelCardCharge: async (id) => {
+        buildFakeCardWebhook(id, { status: "confirmed" });
+      },
+    };
+    expect((await r.refresh(at(CARD_TTL_MS + 3000), card)).status).toBe("paid");
+  });
+
+  it("keeps the payment pending when the provider is down at expiry", async () => {
+    const r = await awaiting("card");
+    const down = async () => {
+      throw new Error("down");
+    };
+    const card: CardProvider = { ...fakeCardProvider, cancelCardCharge: down, getCharge: down };
+    expect((await r.refresh(at(CARD_TTL_MS + 3000), card)).status).toBe("awaiting_payment");
+    expect((await r.rows()).map((p) => p.status)).toEqual(["pending"]);
+  });
+
+  it("keeps the payment pending when the cancel fails and the machine still waits", async () => {
+    const r = await awaiting("card");
+    const card: CardProvider = {
+      ...fakeCardProvider,
+      cancelCardCharge: async () => {
+        throw new Error("down");
+      },
+    };
+    expect((await r.refresh(at(CARD_TTL_MS + 3000), card)).status).toBe("awaiting_payment");
+    expect((await r.rows()).map((p) => p.status)).toEqual(["pending"]);
+  });
+
+  it("keeps the payment pending at expiry when no card provider can be resolved", async () => {
+    const r = await awaiting("card");
+    vi.stubEnv("CARD_PROVIDER", "nope");
+    const view = await withOrg(r.orgId, (tx) =>
+      refreshSale(tx, r.store, r.saleId, fakeProvider, at(CARD_TTL_MS + 3000)),
+    );
+    expect(view.status).toBe("awaiting_payment");
+    expect((await r.rows()).map((p) => p.status)).toEqual(["pending"]);
+  });
+
   it("keeps waiting while the provider is down", async () => {
     const r = await awaiting("card");
     const broken: CardProvider = { ...fakeCardProvider, getCharge: async () => { throw new Error("down"); } };
@@ -105,7 +149,6 @@ describe("refreshSale with a card payment", () => {
     const view = await withOrg(r.orgId, (tx) =>
       refreshSale(tx, r.store, r.saleId, fakeProvider, at(CARD_CHECK_INTERVAL_MS)),
     );
-    vi.unstubAllEnvs();
     expect(view.status).toBe("awaiting_payment");
   });
 });

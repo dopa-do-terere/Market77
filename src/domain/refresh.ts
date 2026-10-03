@@ -55,14 +55,30 @@ export async function refreshSale(
         } else if (charge?.status === "failed") {
           await failPayment(tx, p.id as string, charge.failureReason ?? "declined", now);
         } else if (charge?.status === "expired" || (p.expires_at as Date) <= now) {
-          if (source) {
+          if (!isCard) {
+            await failPayment(tx, p.id as string, "expired", now);
+          } else if (source) {
+            // Never discard an approval: stop the machine, ask again, and only then expire.
+            // Unknown terminal state leaves the payment pending; the next refresh retries.
+            let stopped = true;
             try {
-              await withTimeout(source.cancelCardCharge(p.external_id as string)); // stop the machine waiting
+              await withTimeout(source.cancelCardCharge(p.external_id as string));
             } catch {
-              // best effort: the charge ran out anyway
+              stopped = false;
+            }
+            let final: Charge | null = null;
+            try {
+              final = await withTimeout(source.getCharge(p.external_id as string));
+            } catch {
+              // unknown: keep waiting
+            }
+            if (final?.status === "confirmed") {
+              const result = await confirmPayment(tx, p.id as string, final.amountCents, { source: "reconcile" }, now);
+              if (result === "rejected") await reopenSale(tx, sale.id, now);
+            } else if (final && (stopped || final.status !== "pending")) {
+              await failPayment(tx, p.id as string, "expired", now);
             }
           }
-          await failPayment(tx, p.id as string, "expired", now);
         }
       }
     }
