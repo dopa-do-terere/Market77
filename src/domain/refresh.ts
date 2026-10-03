@@ -1,5 +1,5 @@
 import type { Tx } from "@/db/tenant";
-import type { PaymentProvider } from "@/payments/provider";
+import { type PaymentProvider, withTimeout } from "@/payments/provider";
 import { confirmPayment } from "./payments";
 import { CART_TTL_MS, type SaleView, type TerminalCtx, getSaleView, lockSale } from "./sales";
 
@@ -35,13 +35,14 @@ export async function refreshSale(
     } else if (!p.checked_at || now.getTime() - (p.checked_at as Date).getTime() >= CHECK_INTERVAL_MS) {
       let charge: Awaited<ReturnType<PaymentProvider["getCharge"]>> | null = null;
       try {
-        charge = await provider.getCharge(p.external_id as string);
+        charge = await withTimeout(provider.getCharge(p.external_id as string));
       } catch {
         // provider down: keep waiting, or let an old QR expire below
       }
       await tx`update payments set checked_at = ${now} where id = ${p.id}`;
       if (charge?.status === "confirmed") {
-        await confirmPayment(tx, p.id as string, charge.amountCents, { source: "reconcile" }, now);
+        const result = await confirmPayment(tx, p.id as string, charge.amountCents, { source: "reconcile" }, now);
+        if (result === "rejected") await reopen(tx, sale.id, now); // the payment was marked failed
       } else if (charge?.status === "failed") {
         await tx`update payments set status = 'failed' where id = ${p.id}`;
         await reopen(tx, sale.id, now);

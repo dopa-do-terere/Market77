@@ -12,6 +12,7 @@ export async function reconcilePending(now: Date = new Date(), limit = 100): Pro
   const rows = await adminSql`
     select id, org_id, market_id, terminal_id from sales
     where status = 'awaiting_payment' order by created_at limit ${limit}`;
+  const provider = getProvider();
   let visited = 0;
   for (const r of rows) {
     try {
@@ -20,7 +21,7 @@ export async function reconcilePending(now: Date = new Date(), limit = 100): Pro
           tx,
           { terminalId: r.terminal_id as string, marketId: r.market_id as string },
           r.id as string,
-          getProvider(),
+          provider,
           now,
         ),
       );

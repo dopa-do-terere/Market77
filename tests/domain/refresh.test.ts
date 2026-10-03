@@ -6,7 +6,7 @@ import { CHECK_INTERVAL_MS, refreshSale } from "@/domain/refresh";
 import { addItemByBarcode } from "@/domain/sales";
 import { getBalance } from "@/domain/stock";
 import { buildFakeWebhook, fakeProvider } from "@/payments/fake";
-import type { PaymentProvider } from "@/payments/provider";
+import { type PaymentProvider, providerTimeout } from "@/payments/provider";
 import { makeOrg, resetDb, seedSellable, seedStore } from "../helpers";
 
 beforeEach(resetDb);
@@ -94,7 +94,33 @@ describe("refreshSale", () => {
       },
     };
     expect((await r.refresh(at(CHECK_INTERVAL_MS), down)).status).toBe("awaiting_payment");
+    const [pay] = await adminSql`select status from payments where sale_id = ${r.saleId}`;
+    expect(pay.status).toBe("pending");
+    const [mv] = await adminSql`select count(*)::int as n from stock_movements where sale_id = ${r.saleId}`;
+    expect(mv.n).toBe(0);
     expect((await r.refresh(at(4 * 60_000), down)).status).toBe("open");
+  });
+
+  it("does not hang when the provider never answers", async () => {
+    const r = await awaiting();
+    const hung: PaymentProvider = { ...fakeProvider, getCharge: () => new Promise(() => {}) };
+    providerTimeout.ms = 50;
+    try {
+      expect((await r.refresh(at(CHECK_INTERVAL_MS), hung)).status).toBe("awaiting_payment");
+      expect((await r.refresh(at(4 * 60_000), hung)).status).toBe("open");
+    } finally {
+      providerTimeout.ms = 5000;
+    }
+  });
+
+  it("reopens at once when the confirmed payment is rejected", async () => {
+    const r = await awaiting();
+    await adminSql`update sales set total_cents = 700 where id = ${r.saleId}`;
+    buildFakeWebhook(r.externalId, { status: "confirmed" });
+    const view = await r.refresh(at(CHECK_INTERVAL_MS));
+    expect([view.status, view.payment?.status]).toEqual(["open", "failed"]);
+    const [mv] = await adminSql`select count(*)::int as n from stock_movements where sale_id = ${r.saleId}`;
+    expect(mv.n).toBe(0);
   });
 
   it("returns an awaiting sale with no pending payment to open", async () => {

@@ -13,7 +13,7 @@ g.__m77 ??= {
   app: postgres(required("DATABASE_APP_URL"), { max: 10 }),
 };
 
-/** Owner connection: bypasses RLS. Only auth code and migrations may use it. */
+/** Owner connection: bypasses RLS. Only auth code, migrations, and the provider webhook and reconcile sweep (only to find the organization; everything else goes through withOrg) may use it. */
 export const adminSql = g.__m77.admin;
 /** Application role: subject to RLS. All business data goes through withOrg(). */
 export const appSql = g.__m77.app;

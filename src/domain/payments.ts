@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import type { Tx } from "@/db/tenant";
 import { AppError } from "@/lib/errors";
-import type { PaymentProvider } from "@/payments/provider";
+import { type PaymentProvider, withTimeout } from "@/payments/provider";
 import { type SaleView, type TerminalCtx, getSaleView, lockSale } from "./sales";
 
 export const QR_TTL_MS = 3 * 60_000;
@@ -37,7 +37,7 @@ export async function startPayment(
 
   let charge: Awaited<ReturnType<PaymentProvider["createPixCharge"]>>;
   try {
-    charge = await provider.createPixCharge({ saleId: sale.id, amountCents, expiresAt });
+    charge = await withTimeout(provider.createPixCharge({ saleId: sale.id, amountCents, expiresAt }));
   } catch {
     throw new AppError("provider_unavailable");
   }

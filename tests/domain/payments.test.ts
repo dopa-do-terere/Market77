@@ -5,7 +5,7 @@ import { confirmPayment, startPayment } from "@/domain/payments";
 import { addItemByBarcode, getSaleView, setItemQuantity } from "@/domain/sales";
 import { getBalance, recordMovement } from "@/domain/stock";
 import { fakeProvider } from "@/payments/fake";
-import type { PaymentProvider } from "@/payments/provider";
+import { type PaymentProvider, providerTimeout } from "@/payments/provider";
 import { codeOf, makeOrg, resetDb, seedSellable, seedStore } from "../helpers";
 
 beforeEach(resetDb);
@@ -92,6 +92,19 @@ describe("startPayment", () => {
       },
     };
     expect(await codeOf(pay(r, NOW, broken))).toBe("provider_unavailable");
+    expect(await saleStatus(r)).toBe("open");
+    expect(await payments(r)).toHaveLength(0);
+  });
+
+  it("maps a provider that never answers to provider_unavailable", async () => {
+    const r = await ready();
+    const hung: PaymentProvider = { ...fakeProvider, createPixCharge: () => new Promise(() => {}) };
+    providerTimeout.ms = 50;
+    try {
+      expect(await codeOf(pay(r, NOW, hung))).toBe("provider_unavailable");
+    } finally {
+      providerTimeout.ms = 5000;
+    }
     expect(await saleStatus(r)).toBe("open");
     expect(await payments(r)).toHaveLength(0);
   });
