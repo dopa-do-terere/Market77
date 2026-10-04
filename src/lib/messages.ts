@@ -10,6 +10,7 @@ const MESSAGES: Record<string, string> = {
   terminal_revoked: "Totem desativado. Procure o responsável.",
   product_not_found: "Produto não cadastrado.",
   product_inactive: "Produto indisponível neste mercado.",
+  product_expired: "Produto vencido. Procure o atendimento.",
   sale_not_found: "Venda não encontrada.",
   sale_not_editable: "Esta venda não pode mais ser alterada.",
   sale_empty: "Adicione ao menos um produto.",
