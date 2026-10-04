@@ -2,10 +2,13 @@ import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@/lib/errors";
+import { confirmPayment, startPayment } from "@/domain/payments";
+import { addItemByBarcode } from "@/domain/sales";
+import { fakeProvider } from "@/payments/fake";
 
 const TABLES = [
   "terminal_commands", "agent_releases",
-  "payments", "sale_items", "sales", "terminals",
+  "fiscal_documents", "payments", "sale_items", "sales", "terminals",
   "stock_lots", "stock_movements", "market_products", "product_barcodes", "products",
   "markets", "memberships", "sessions", "users", "organizations",
 ];
@@ -125,6 +128,47 @@ export async function addLot(
       values (${orgId}, ${marketProductId}, 'in', ${quantity}, ${l.id})`;
   }
   return l.id as string;
+}
+
+/** A market and a product with no price or stock, for tests that only need rows to exist. */
+export async function seedProductless(orgId: string) {
+  return withOrg(orgId, async (tx) => {
+    const [m] = await tx`insert into markets (org_id, name) values (${orgId}, 'Loja') returning id`;
+    const [p] = await tx`insert into products (org_id, name) values (${orgId}, 'Água') returning id`;
+    return { marketId: m.id as string, productId: p.id as string };
+  });
+}
+
+/** A store with NFC-e on, a valid CNPJ, and one sellable product ("Água", R$ 5,00) with an NCM. */
+export async function fiscalShop(orgId: string, o: { enabled?: boolean; ncm?: string | null } = {}) {
+  const store = await seedStore(orgId);
+  const barcode = "7891000100103";
+  const item = await seedSellable(orgId, store.marketId, { barcode, priceCents: 500 });
+  await adminSql`
+    update markets set nfce_enabled = ${o.enabled ?? true}, cnpj = '12345678000195',
+      state_registration = '123456789', uf = 'SP' where id = ${store.marketId}`;
+  await adminSql`update products set ncm = ${o.ncm === undefined ? "22021000" : o.ncm} where id = ${item.productId}`;
+  return { ...store, ...item, barcode };
+}
+
+/** A sale of `units` of the product, paid with a confirmed fake Pix. Returns the sale id. */
+export async function paidSale(
+  orgId: string,
+  store: { terminalId: string; marketId: string },
+  barcode: string,
+  units: number,
+  o: { cpf?: string; now?: Date } = {},
+): Promise<string> {
+  const now = o.now ?? new Date("2026-10-03T15:00:00Z");
+  let sale = await withOrg(orgId, (tx) => addItemByBarcode(tx, orgId, store, { barcode }, now));
+  for (let i = 1; i < units; i++) {
+    sale = await withOrg(orgId, (tx) => addItemByBarcode(tx, orgId, store, { saleId: sale.id, barcode }, now));
+  }
+  if (o.cpf) await adminSql`update sales set customer_cpf = ${o.cpf} where id = ${sale.id}`;
+  await withOrg(orgId, (tx) => startPayment(tx, orgId, store, sale.id, fakeProvider, now));
+  const [p] = await adminSql`select id, amount_cents from payments where sale_id = ${sale.id}`;
+  await withOrg(orgId, (tx) => confirmPayment(tx, p.id as string, p.amount_cents as number, { test: true }, now));
+  return sale.id;
 }
 
 export async function codeOf(p: Promise<unknown>): Promise<string | undefined> {
