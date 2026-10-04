@@ -18,7 +18,7 @@
 | 2 | PDV do totem, venda e Pix |
 | 3 | Agente do totem, heartbeat e comandos remotos |
 | 4 | Cartão na maquininha (adaptador simulado) |
-| 5A | Lote e validade (em andamento) |
+| 5A | Lote e validade |
 | 5B | NFC-e (planejada) |
 
 Stack: Next.js 15, React 19, TypeScript, Postgres 16 (`postgres.js`, migrations em SQL puro), `zod` e `vitest`. Specs e planos de cada fase ficam em `docs/superpowers/`.
@@ -89,6 +89,17 @@ curl -X POST http://localhost:3000/api/dev/fake-card/<identificador>/decline
 Variáveis: `CARD_PROVIDER=fake` e `FAKE_CARD_SECRET` (assinatura do webhook simulado). O webhook do provedor de cartão é `POST /api/webhooks/card/<provedor>`. O adaptador `fake` de cartão e as rotas `/api/dev/fake-card` recusam funcionar com `NODE_ENV=production`.
 
 Um adaptador real implementa a interface `CardProvider` (`src/payments/card.ts`) e passa na suíte de contrato `tests/payments/card-contract.ts`. Se a maquininha escolhida exigir SDK local, será preciso uma ponte pelo agente do totem (fase própria).
+
+## Lote e validade (fase 5A)
+
+Em **Mercados**, ao adicionar ou atualizar um produto, marque **Controla validade** para os perecíveis. Para esses produtos:
+
+- Toda **entrada** exige a data de validade. Entradas na mesma data somam no mesmo lote.
+- A **venda** baixa sempre o lote que vence primeiro (FEFO). Perda e ajuste negativo fazem o mesmo, ou baixam um lote escolhido.
+- A seção **Validade** do mercado lista os lotes vencidos e os que vencem em 7 dias, e a página inicial mostra quantos lotes já venceram.
+- O totem recusa ("Produto vencido. Procure o atendimento.") um produto cujo saldo inteiro está em lotes vencidos. O produto sai da prateleira e a perda é registrada em **Movimentar**.
+
+O saldo que já existia antes de ligar o controle continua valendo como "saldo sem lote" e sai por último. A NFC-e será a fase 5B.
 
 ## Testes
 

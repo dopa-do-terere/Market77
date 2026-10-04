@@ -18,6 +18,7 @@ const STATUS: Record<string, number> = {
   sale_not_found: 404,
   product_not_found: 404,
   product_inactive: 404,
+  product_expired: 404,
   sale_not_editable: 409,
   sale_empty: 422,
   sale_too_large: 422,

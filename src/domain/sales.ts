@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Tx } from "@/db/tenant";
 import { AppError } from "@/lib/errors";
 import { parse } from "@/lib/validate";
+import { isFullyExpired, todayBR } from "./lots";
 
 export const CART_TTL_MS = 5 * 60_000;
 export const MAX_QUANTITY = 99;
@@ -131,13 +132,16 @@ export async function addItemByBarcode(
 ): Promise<SaleView> {
   const i = parse(Scan, raw);
   const [mp] = await tx`
-    select mp.id, mp.price_cents, mp.active, p.name
+    select mp.id, mp.price_cents, mp.active, mp.tracks_expiry, p.name
     from product_barcodes b
     join market_products mp on mp.product_id = b.product_id and mp.market_id = ${term.marketId}
     join products p on p.id = b.product_id
     where b.code = ${i.barcode}`;
   if (!mp) throw new AppError("product_not_found");
   if (!mp.active) throw new AppError("product_inactive");
+  if (mp.tracks_expiry && (await isFullyExpired(tx, mp.id as string, todayBR(now)))) {
+    throw new AppError("product_expired");
+  }
 
   let saleId: string;
   if (i.saleId) {

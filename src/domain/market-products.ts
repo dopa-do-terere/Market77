@@ -9,6 +9,7 @@ const Input = z.object({
   priceCents: z.number().int().min(1).max(2147483647),
   minStock: z.number().int().min(0).max(2147483647).default(0),
   active: z.boolean().default(true),
+  tracksExpiry: z.boolean().optional(),
 });
 
 export type MarketProductRow = {
@@ -18,6 +19,7 @@ export type MarketProductRow = {
   priceCents: number;
   minStock: number;
   active: boolean;
+  tracksExpiry: boolean;
   balance: number;
 };
 
@@ -25,10 +27,11 @@ export async function setMarketProduct(tx: Tx, orgId: string, raw: unknown): Pro
   const i = parse(Input, raw);
   try {
     const [row] = await tx`
-      insert into market_products (org_id, market_id, product_id, price_cents, min_stock, active)
-      values (${orgId}, ${i.marketId}, ${i.productId}, ${i.priceCents}, ${i.minStock}, ${i.active})
+      insert into market_products (org_id, market_id, product_id, price_cents, min_stock, active, tracks_expiry)
+      values (${orgId}, ${i.marketId}, ${i.productId}, ${i.priceCents}, ${i.minStock}, ${i.active}, ${i.tracksExpiry ?? false})
       on conflict (market_id, product_id) do update
-        set price_cents = excluded.price_cents, min_stock = excluded.min_stock, active = excluded.active
+        set price_cents = excluded.price_cents, min_stock = excluded.min_stock, active = excluded.active,
+            tracks_expiry = coalesce(${i.tracksExpiry ?? null}::boolean, market_products.tracks_expiry)
       returning id`;
     return { id: row.id as string };
   } catch (e) {
@@ -39,7 +42,7 @@ export async function setMarketProduct(tx: Tx, orgId: string, raw: unknown): Pro
 
 export async function listMarketProducts(tx: Tx, marketId: string): Promise<MarketProductRow[]> {
   const rows = await tx`
-    select mp.id, mp.product_id, p.name, mp.price_cents, mp.min_stock, mp.active,
+    select mp.id, mp.product_id, p.name, mp.price_cents, mp.min_stock, mp.active, mp.tracks_expiry,
       coalesce((select sum(s.quantity) from stock_movements s where s.market_product_id = mp.id), 0)::bigint as balance
     from market_products mp join products p on p.id = mp.product_id
     where mp.market_id = ${marketId} order by p.name`;
@@ -50,6 +53,7 @@ export async function listMarketProducts(tx: Tx, marketId: string): Promise<Mark
     priceCents: r.price_cents as number,
     minStock: r.min_stock as number,
     active: r.active as boolean,
+    tracksExpiry: r.tracks_expiry as boolean,
     balance: Number(r.balance),
   }));
 }
