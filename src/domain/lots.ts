@@ -84,10 +84,11 @@ export async function allocateFefo(tx: Tx, marketProductId: string, quantity: nu
 /**
  * Serializes work on the stock of these products. Callers lock in this one order (sale, payment,
  * then products by id) so two confirmations never read the same lot balance or deadlock.
+ * Uses FOR NO KEY UPDATE so it still excludes other lockers but not the KEY SHARE of foreign-key checks (scans on other totems).
  */
 export async function lockProducts(tx: Tx, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  await tx`select id from market_products where id in ${tx(ids)} order by id for update`;
+  await tx`select id from market_products where id in ${tx(ids)} order by id for no key update`;
 }
 
 /** True when the product has stock in expired lots and nothing valid left (lots not expired, or no lot). */

@@ -29,6 +29,15 @@ describe("expiry alerts", () => {
     expect(alerts[0].productName).toBe("Água");
   });
 
+  it("lists a lot expiring exactly today as expiring", async () => {
+    const orgId = await makeOrg("A");
+    const { marketId, marketProductId: mp } = await seedMarketProduct(orgId);
+    await track(mp);
+    await addLot(orgId, mp, "2026-10-03", 2);
+    const alerts = await withOrg(orgId, (tx) => listExpiryAlerts(tx, marketId, NOW));
+    expect(alerts.map((a) => [a.expiresOn, a.quantity, a.status])).toEqual([["2026-10-03", 2, "expiring"]]);
+  });
+
   it("ignores products that do not track expiry and other markets", async () => {
     const orgId = await makeOrg("A");
     const untracked = await seedMarketProduct(orgId);

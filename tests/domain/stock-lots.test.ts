@@ -116,6 +116,17 @@ describe("a product without expiry control", () => {
     expect((await adminSql`select id from stock_lots`).length).toBe(0);
   });
 
+  it("rejects a lot of another organization and books nothing", async () => {
+    const { orgId, mp } = await tracked();
+    const b = await makeOrg("B");
+    const other = await seedMarketProduct(b);
+    await track(other.marketProductId);
+    const foreignLot = await addLot(b, other.marketProductId, "2026-12-01", 5);
+    expect(await codeOf(move(orgId, mp, "loss", 1, { lotId: foreignLot }))).toBe("not_found");
+    expect(await rows(mp)).toHaveLength(0);
+    expect(await rows(other.marketProductId)).toHaveLength(1);
+  });
+
   it("keeps the old balance as the unlotted balance when control is turned on", async () => {
     const orgId = await makeOrg("A");
     const { marketProductId: mp } = await seedMarketProduct(orgId);

@@ -99,14 +99,17 @@ export async function listLowStock(tx: Tx, marketId: string): Promise<MarketProd
 }
 
 /**
- * Takes a paid sale out of stock: one movement per product, split by lot (first-expired-first-out)
- * for products that track expiry. The unique index on (sale, product, lot) makes a repeat a no-op error.
+ * Takes a paid sale out of stock: one movement per product and per lot (first-expired-first-out) for
+ * products that track expiry; lot_id is null for products without control or for the shortfall.
+ * Idempotency comes from the already_confirmed/rejected early returns in confirmPayment; the unique
+ * index on (sale, product, lot) is the last defense (a repeat raises an error, it is not a no-op).
  */
 export async function debitSale(tx: Tx, saleId: string): Promise<void> {
   const items = await tx`
     select org_id, market_product_id, quantity from sale_items where sale_id = ${saleId} order by market_product_id`;
   if (items.length === 0) return;
   const ids = items.map((i) => i.market_product_id as string);
+  // ponytail: the flag is read before the lock; a flip in that window books this one sale the other way (totals stay correct).
   const tracked = new Set(
     (await tx`select id from market_products where id in ${tx(ids)} and tracks_expiry`).map((r) => r.id as string),
   );

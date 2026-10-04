@@ -125,7 +125,14 @@ export default async function MarketPage({
           <label>Preço (R$) <input name="price" required inputMode="decimal" placeholder="5,90" /></label>
           <label>Estoque mínimo <input name="minStock" type="number" min={0} defaultValue={0} /></label>
           <label>Ativo <input name="active" type="checkbox" defaultChecked /></label>
-          <label>Controla validade <input name="tracksExpiry" type="checkbox" /></label>
+          <label>
+            Controla validade
+            <select name="tracksExpiry" defaultValue="">
+              <option value="">Manter</option>
+              <option value="on">Ligar</option>
+              <option value="off">Desligar</option>
+            </select>
+          </label>
           <button type="submit">Salvar</button>
         </form>
       )}

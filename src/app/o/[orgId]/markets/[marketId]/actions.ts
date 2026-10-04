@@ -23,7 +23,7 @@ export async function setMarketProductAction(orgId: string, marketId: string, fd
         priceCents,
         minStock: Number(raw.minStock ?? 0),
         active: raw.active === "on",
-        tracksExpiry: raw.tracksExpiry === "on",
+        tracksExpiry: raw.tracksExpiry ? raw.tracksExpiry === "on" : undefined,
       }),
     );
   } catch (e) {
