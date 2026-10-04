@@ -100,3 +100,36 @@ export async function isFullyExpired(tx: Tx, marketProductId: string, today: str
     where s.market_product_id = ${marketProductId}`;
   return Number(r.expired) > 0 && Number(r.valid) <= 0;
 }
+
+export type ExpiryAlert = {
+  lotId: string;
+  marketProductId: string;
+  productName: string;
+  expiresOn: string;
+  quantity: number;
+  status: "expired" | "expiring";
+};
+
+/** Lots with stock that already expired or expire within EXPIRY_WARN_DAYS, earliest first. */
+export async function listExpiryAlerts(tx: Tx, marketId: string, now: Date): Promise<ExpiryAlert[]> {
+  const today = todayBR(now);
+  const limit = plusDays(today, EXPIRY_WARN_DAYS);
+  const rows = await tx`
+    select l.id, l.market_product_id, p.name, l.expires_on::text as expires_on, sum(s.quantity)::bigint as quantity
+    from stock_lots l
+    join market_products mp on mp.id = l.market_product_id
+    join products p on p.id = mp.product_id
+    join stock_movements s on s.lot_id = l.id
+    where mp.market_id = ${marketId} and mp.tracks_expiry and l.expires_on <= ${limit}
+    group by l.id, l.market_product_id, p.name, l.expires_on
+    having sum(s.quantity) > 0
+    order by l.expires_on, p.name`;
+  return rows.map((r) => ({
+    lotId: r.id as string,
+    marketProductId: r.market_product_id as string,
+    productName: r.name as string,
+    expiresOn: r.expires_on as string,
+    quantity: Number(r.quantity),
+    status: (r.expires_on as string) < today ? "expired" : "expiring",
+  }));
+}
