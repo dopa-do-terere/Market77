@@ -23,6 +23,7 @@ export async function setMarketProductAction(orgId: string, marketId: string, fd
         priceCents,
         minStock: Number(raw.minStock ?? 0),
         active: raw.active === "on",
+        tracksExpiry: raw.tracksExpiry === "on",
       }),
     );
   } catch (e) {
@@ -42,6 +43,8 @@ export async function moveStockAction(orgId: string, marketId: string, marketPro
         type: raw.type,
         quantity: Number(raw.quantity),
         note: raw.note,
+        expiresOn: raw.expiresOn,
+        lotId: raw.lotId,
       }),
     );
   } catch (e) {
