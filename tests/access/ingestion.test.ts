@@ -107,6 +107,8 @@ describe("event ingestion", () => {
     await bad({ occurredAt: iso(0), personId: "" });
     await bad({ occurredAt: iso(0), personId: "p".repeat(65) });
     await bad({ occurredAt: iso(0), eventId: 7 });
+    await bad({ occurredAt: iso(0), personId: "a\u0000b" });
+    await bad({ occurredAt: iso(0), eventId: "a\u0000b" });
     await bad(undefined, "{");
     await bad(undefined, "null");
     expect(await events()).toHaveLength(0);
@@ -129,5 +131,53 @@ describe("event ingestion", () => {
     await send(source.token, { occurredAt: iso(0), personId: "u1" });
     await send(source.token, { occurredAt: iso(0), personId: "u2" });
     expect((await events()).map((e) => e.person_external_id).sort()).toEqual([null, "u2"].sort());
+  });
+
+  it("accepts a lowercase bearer scheme and rejects a bearer without token", async () => {
+    const { source } = await setup();
+    const r = await eventHandler(
+      new Request("http://m77.test/api/access/events", {
+        method: "POST",
+        headers: { authorization: `bearer ${source.token}` },
+        body: JSON.stringify({ occurredAt: iso(0) }),
+      }),
+      NOW,
+    );
+    expect(r.status).toBe(201);
+    const empty = await eventHandler(
+      new Request("http://m77.test/api/access/events", {
+        method: "POST",
+        headers: { authorization: "Bearer" },
+        body: JSON.stringify({ occurredAt: iso(0) }),
+      }),
+      NOW,
+    );
+    expect([empty.status, (await json(empty)).error]).toEqual([401, "unauthorized"]);
+  });
+
+  it("does not touch last_event_at on a duplicate", async () => {
+    const { source } = await setup();
+    const body = { occurredAt: iso(0), eventId: "e1" };
+    await send(source.token, body);
+    const later = new Date(NOW.getTime() + 60_000);
+    const dup = await eventHandler(
+      new Request("http://m77.test/api/access/events", {
+        method: "POST",
+        headers: { authorization: `Bearer ${source.token}` },
+        body: JSON.stringify(body),
+      }),
+      later,
+    );
+    expect(dup.status).toBe(200);
+    const [s] = await adminSql`select last_event_at from access_sources where id = ${source.id}`;
+    expect(s.last_event_at).toEqual(NOW);
+  });
+
+  it("does not anonymize a person forgotten on another reader", async () => {
+    const { orgId, marketId, source } = await setup();
+    const other = await seedAccessSource(orgId, marketId);
+    await seedPerson(orgId, other.id, "u1", "Ana", { forgotten: true });
+    await send(source.token, { occurredAt: iso(0), personId: "u1" });
+    expect((await events()).map((e) => e.person_external_id)).toEqual(["u1"]);
   });
 });

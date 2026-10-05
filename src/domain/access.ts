@@ -41,11 +41,14 @@ export async function revokeAccessSource(tx: Tx, sourceId: string): Promise<void
 export const MAX_FUTURE_MS = 5 * 60_000;
 export const MAX_PAST_MS = 7 * 86_400_000;
 
+// Postgres refuses NUL in text (22021): reject it as bad input instead of a 500.
+const NO_NUL = /^[^\u0000]*$/;
+
 // zod drops unknown keys: nothing but these four fields is ever stored.
 const EventInput = z.object({
   occurredAt: z.string().datetime({ offset: true }),
-  eventId: z.string().min(1).max(64).optional(),
-  personId: z.string().min(1).max(64).optional(),
+  eventId: z.string().min(1).max(64).regex(NO_NUL).optional(),
+  personId: z.string().min(1).max(64).regex(NO_NUL).optional(),
   kind: z.literal("entry").optional(),
 });
 

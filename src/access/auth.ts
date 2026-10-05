@@ -10,7 +10,7 @@ export type SourceAuth = { sourceId: string; orgId: string; marketId: string };
  */
 export async function requireSource(req: Request): Promise<SourceAuth> {
   const header = req.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const token = header.match(/^Bearer\s+(.+)$/i)?.[1].trim() ?? "";
   if (!token) throw new AppError("unauthorized");
   const [row] = await adminSql`
     select id, org_id, market_id, revoked_at from access_sources where token_hash = ${hashAccessToken(token)}`;
