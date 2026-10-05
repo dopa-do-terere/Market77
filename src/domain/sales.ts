@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Tx } from "@/db/tenant";
+import { maskCpf, normalizeCpf } from "@/lib/tax-id";
 import { AppError } from "@/lib/errors";
 import { parse } from "@/lib/validate";
 import { isFullyExpired, todayBR } from "./lots";
@@ -35,6 +36,7 @@ export type SaleView = {
   items: SaleItemView[];
   payment: PaymentView | null;
   paymentFailure: PaymentFailure | null;
+  customerCpfMasked: string | null;
 };
 export type LockedSale = { id: string; status: SaleStatus; expiresAt: Date };
 
@@ -61,7 +63,7 @@ export async function lockSale(tx: Tx, term: TerminalCtx, saleId: string, now: D
 }
 
 export async function getSaleView(tx: Tx, saleId: string): Promise<SaleView> {
-  const [s] = await tx`select id, status, total_cents, expires_at from sales where id = ${saleId}`;
+  const [s] = await tx`select id, status, total_cents, expires_at, customer_cpf from sales where id = ${saleId}`;
   if (!s) throw new AppError("sale_not_found");
   const items = await tx`
     select id, market_product_id, product_name, quantity, unit_price_cents
@@ -102,6 +104,7 @@ export async function getSaleView(tx: Tx, saleId: string): Promise<SaleView> {
     })),
     payment,
     paymentFailure,
+    customerCpfMasked: s.customer_cpf ? maskCpf(s.customer_cpf as string) : null,
   };
 }
 
@@ -195,5 +198,25 @@ export async function cancelSale(tx: Tx, term: TerminalCtx, saleId: string, now:
   const sale = await lockSale(tx, term, saleId, now);
   if (sale.status !== "open") throw new AppError("sale_not_editable");
   await tx`update sales set status = 'cancelled' where id = ${sale.id}`;
+  return getSaleView(tx, sale.id);
+}
+
+const Customer = z.object({ cpf: z.string().nullable() });
+
+/** Sets (or clears, with null) the CPF that goes on the invoice. Only while the sale is still the cart. */
+export async function setCustomerCpf(
+  tx: Tx,
+  term: TerminalCtx,
+  saleId: string,
+  raw: unknown,
+  now: Date,
+): Promise<SaleView> {
+  const i = parse(Customer, raw);
+  const cpf = i.cpf === null ? null : normalizeCpf(i.cpf);
+  if (i.cpf !== null && cpf === null) throw new AppError("invalid_cpf");
+  const sale = await lockSale(tx, term, saleId, now);
+  if (sale.status !== "open") throw new AppError("sale_not_editable");
+  await tx`
+    update sales set customer_cpf = ${cpf}, expires_at = ${plus(now, CART_TTL_MS)} where id = ${sale.id}`;
   return getSaleView(tx, sale.id);
 }

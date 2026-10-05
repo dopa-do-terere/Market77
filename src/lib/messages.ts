@@ -16,6 +16,7 @@ const MESSAGES: Record<string, string> = {
   sale_empty: "Adicione ao menos um produto.",
   sale_too_large: "O valor da compra passou do limite de R$ 10.000,00.",
   quantity_limit: "Quantidade máxima por produto: 99.",
+  invalid_cpf: "CPF inválido. Confira os números.",
   provider_unavailable: "Pagamento indisponível no momento. Tente novamente.",
   payment_failed: "Pagamento não confirmado.",
   command_in_progress: "Já existe um comando deste tipo em andamento para este totem.",
