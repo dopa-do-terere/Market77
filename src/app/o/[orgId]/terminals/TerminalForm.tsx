@@ -23,6 +23,10 @@ export function TerminalForm({ orgId, markets }: { orgId: string; markets: { id:
             ))}
           </select>
         </label>{" "}
+        <label>
+          ID da maquininha Point (opcional){" "}
+          <input name="pointDeviceId" maxLength={64} pattern="[\x21-\x7e]+" title="Sem espaços" />
+        </label>{" "}
         <button type="submit" disabled={pending || markets.length === 0}>
           Cadastrar totem
         </button>

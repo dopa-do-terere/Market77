@@ -19,6 +19,7 @@ export default async function OrgLayout({
         <a href={`${base}/products`}>Produtos</a>{" "}
         {can(role, "sale:read") && <a href={`${base}/sales`}>Vendas</a>}{" "}
         {can(role, "terminal:write") && <a href={`${base}/terminals`}>Totens</a>}{" "}
+        {can(role, "payment:write") && <a href={`${base}/settings/payments`}>Pagamentos</a>}{" "}
         {can(role, "member:write") && <a href={`${base}/team`}>Equipe</a>}
         <form action={logoutAction} style={{ display: "inline" }}>
           <button type="submit">Sair</button>

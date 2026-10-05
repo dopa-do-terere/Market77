@@ -8,7 +8,7 @@ import { listTerminals } from "@/domain/terminals";
 import { COMMAND_LABEL, COMMAND_STATUS_LABEL } from "@/lib/labels";
 import { message } from "@/lib/messages";
 import { TerminalForm } from "./TerminalForm";
-import { revokeTerminalAction, sendCommandAction } from "./actions";
+import { revokeTerminalAction, sendCommandAction, setTerminalDeviceAction } from "./actions";
 
 export default async function TerminalsPage({
   params,
@@ -42,7 +42,7 @@ export default async function TerminalsPage({
       <table>
         <thead>
           <tr>
-            <th>Nome</th><th>Mercado</th><th>Estado</th><th>Última batida</th><th>Agente</th><th>PDV</th><th>Ações</th>
+            <th>Nome</th><th>Mercado</th><th>Estado</th><th>Última batida</th><th>Agente</th><th>PDV</th><th>Point</th><th>Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -63,6 +63,22 @@ export default async function TerminalsPage({
                 <td>{t.lastHeartbeatAt?.toLocaleString("pt-BR", { timeZone: t.timezone }) ?? "-"}</td>
                 <td>{t.agentVersion ?? "-"}</td>
                 <td>{t.pdvStatus === "running" ? "aberto" : t.pdvStatus === "stopped" ? "parado" : "-"}</td>
+                <td>
+                  {!t.revokedAt && (
+                    <form action={setTerminalDeviceAction.bind(null, orgId, t.id)} style={{ display: "inline" }}>
+                      <input
+                        name="pointDeviceId"
+                        defaultValue={t.pointDeviceId ?? ""}
+                        placeholder="sem maquininha"
+                        maxLength={64}
+                        pattern="[\x21-\x7e]+"
+                        title="Sem espaços"
+                        size={22}
+                      />{" "}
+                      <button type="submit">Salvar</button>
+                    </form>
+                  )}
+                </td>
                 <td>
                   {!t.revokedAt && (
                     <>
@@ -87,7 +103,7 @@ export default async function TerminalsPage({
                 </td>
               </tr>,
               <tr key={`${t.id}-history`}>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <small>
                     {(history.get(t.id) ?? []).length === 0
                       ? "Nenhum comando enviado."

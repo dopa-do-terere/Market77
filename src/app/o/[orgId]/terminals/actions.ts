@@ -6,7 +6,7 @@ import { releaseStore } from "@/agent/releases";
 import { requireOrg } from "@/auth/guard";
 import { withOrg } from "@/db/tenant";
 import { createCommand } from "@/domain/agent";
-import { createTerminal, revokeTerminal } from "@/domain/terminals";
+import { createTerminal, revokeTerminal, setTerminalDevice } from "@/domain/terminals";
 import { AppError } from "@/lib/errors";
 import { message } from "@/lib/messages";
 import { formToObject } from "@/lib/validate";
@@ -54,6 +54,18 @@ export async function sendCommandAction(orgId: string, terminalId: string, type:
       version = latest.version;
     }
     await withOrg(orgId, (tx) => createCommand(tx, orgId, userId, { terminalId, type, version }, new Date()));
+  } catch (e) {
+    redirectOnAppError(e, path);
+  }
+  redirect(path);
+}
+
+export async function setTerminalDeviceAction(orgId: string, terminalId: string, fd: FormData) {
+  const path = `/o/${orgId}/terminals`;
+  try {
+    await requireOrg(orgId, "terminal:write");
+    const raw = formToObject(fd);
+    await withOrg(orgId, (tx) => setTerminalDevice(tx, terminalId, raw));
   } catch (e) {
     redirectOnAppError(e, path);
   }

@@ -36,3 +36,11 @@ describe("phase 2 permissions", () => {
     expect(can("restocker", "sale:read")).toBe(false);
   });
 });
+
+describe("payment permissions", () => {
+  it("only the owner manages payment credentials", () => {
+    expect(can("owner", "payment:write")).toBe(true);
+    expect(can("manager", "payment:write")).toBe(false);
+    expect(can("restocker", "payment:write")).toBe(false);
+  });
+});
