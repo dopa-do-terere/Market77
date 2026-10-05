@@ -13,6 +13,7 @@ const env = {
   CARD_PROVIDER: "fake",
   FAKE_CARD_SECRET: "test-fake-card-secret",
   FISCAL_PROVIDER: "fake",
+  ACCESS_PROVIDER: "fake",
 };
 Object.assign(process.env, env);
 
