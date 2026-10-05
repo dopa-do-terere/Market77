@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { requireOrgPage } from "@/auth/guard";
+import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { getSaleDetail } from "@/domain/sale-queries";
-import { FAILURE_LABEL, METHOD_LABEL, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { FAILURE_LABEL, FISCAL_LABEL, METHOD_LABEL, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { formatBRL } from "@/lib/money";
+import { reissueFiscalAction } from "./actions";
 
 export default async function SaleDetailPage({ params }: { params: Promise<{ orgId: string; saleId: string }> }) {
   const { orgId, saleId } = await params;
-  await requireOrgPage(orgId, "sale:read");
+  const { role } = await requireOrgPage(orgId, "sale:read");
   const sale = await withOrg(orgId, (tx) => getSaleDetail(tx, saleId));
   if (!sale) notFound();
   const when = (d: Date) => d.toLocaleString("pt-BR", { timeZone: sale.timezone });
@@ -42,6 +44,31 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ org
           </li>
         ))}
       </ul>
+      {sale.customerCpfMasked && <p>CPF na nota: {sale.customerCpfMasked}</p>}
+      {sale.fiscal && (
+        <>
+          <h2>Nota fiscal</h2>
+          <p>
+            {FISCAL_LABEL[sale.fiscal.status] ?? sale.fiscal.status}
+            {sale.fiscal.number !== null && <>, número {sale.fiscal.number}</>}
+            {sale.fiscal.accessKey && <>, chave {sale.fiscal.accessKey}</>}
+            {sale.fiscal.danfeUrl && (
+              <>
+                {" "}
+                (<a href={sale.fiscal.danfeUrl}>DANFE</a>)
+              </>
+            )}
+          </p>
+          {sale.fiscal.lastError && (
+            <p role={sale.fiscal.status === "error" ? "alert" : undefined}>Última falha: {sale.fiscal.lastError}</p>
+          )}
+          {sale.fiscal.status === "error" && can(role, "market:write") && (
+            <form action={reissueFiscalAction.bind(null, orgId, sale.id)}>
+              <button type="submit">Reemitir</button>
+            </form>
+          )}
+        </>
+      )}
       <p>
         <a href={`/o/${orgId}/sales`}>Voltar às vendas</a>
       </p>

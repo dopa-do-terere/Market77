@@ -5,10 +5,11 @@ import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { type LotBalance, formatDay, listExpiryAlerts, listLotBalances } from "@/domain/lots";
 import { listMarketProducts } from "@/domain/market-products";
+import { UFS, listMarkets } from "@/domain/markets";
 import { listProducts } from "@/domain/products";
 import { message } from "@/lib/messages";
 import { formatBRL } from "@/lib/money";
-import { moveStockAction, setMarketProductAction } from "./actions";
+import { moveStockAction, setMarketProductAction, updateMarketFiscalAction } from "./actions";
 
 export default async function MarketPage({
   params,
@@ -21,7 +22,7 @@ export default async function MarketPage({
   const { error } = await searchParams;
   const { role } = await requireOrgPage(orgId, "stock:read");
   if (!z.string().uuid().safeParse(marketId).success) notFound();
-  const { rows, products, lots, alerts } = await withOrg(orgId, async (tx) => {
+  const { rows, products, lots, alerts, market } = await withOrg(orgId, async (tx) => {
     const rows = await listMarketProducts(tx, marketId);
     const lots = new Map<string, LotBalance[]>();
     for (const r of rows) {
@@ -31,6 +32,7 @@ export default async function MarketPage({
       rows,
       lots,
       products: await listProducts(tx),
+      market: (await listMarkets(tx)).find((m) => m.id === marketId),
       alerts: await listExpiryAlerts(tx, marketId, new Date()),
     };
   });
@@ -134,6 +136,30 @@ export default async function MarketPage({
             </select>
           </label>
           <button type="submit">Salvar</button>
+        </form>
+      )}
+      {market && can(role, "market:write") && (
+        <form action={updateMarketFiscalAction.bind(null, orgId, marketId)}>
+          <h2>Dados fiscais (NFC-e)</h2>
+          <label>Emitir NFC-e <input name="nfceEnabled" type="checkbox" defaultChecked={market.nfceEnabled} /></label>
+          <label>CNPJ <input name="cnpj" inputMode="numeric" defaultValue={market.cnpj ?? ""} /></label>
+          <label>Inscrição estadual <input name="stateRegistration" defaultValue={market.stateRegistration ?? ""} /></label>
+          <label>
+            UF{" "}
+            <select name="uf" defaultValue={market.uf ?? ""}>
+              <option value="">Escolha</option>
+              {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </label>
+          <label>
+            Regime{" "}
+            <select name="taxRegime" defaultValue={market.taxRegime}>
+              <option value="simples">Simples Nacional</option>
+              <option value="normal">Regime normal (ainda não emite)</option>
+            </select>
+          </label>
+          <label>Série <input name="nfceSeries" type="number" min={1} max={999} defaultValue={market.nfceSeries} /></label>
+          <button type="submit">Salvar dados fiscais</button>
         </form>
       )}
     </main>
