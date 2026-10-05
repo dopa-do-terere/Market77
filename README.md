@@ -20,6 +20,7 @@
 | 4 | Cartão na maquininha (adaptador simulado) |
 | 5A | Lote e validade |
 | 5B | NFC-e (provedor simulado) |
+| 6 | Registro de acessos (leitor facial simulado) |
 
 Stack: Next.js 15, React 19, TypeScript, Postgres 16 (`postgres.js`, migrations em SQL puro), `zod` e `vitest`. Specs e planos de cada fase ficam em `docs/superpowers/`.
 
@@ -120,6 +121,37 @@ curl -X POST http://localhost:3000/api/dev/fake-fiscal/mode -d '{"mode":"down"}'
 Enquanto não houver provedor fiscal real, não ligue **Emitir NFC-e** em produção: com o simulador, cada nota fica 8 vezes indisponível por cerca de 2 horas e vira erro.
 
 O adaptador `fake` e essa rota recusam funcionar com `NODE_ENV=production`. Um provedor real implementa `FiscalProvider` (`src/fiscal/provider.ts`) e passa na suíte de contrato `tests/fiscal/fiscal-contract.ts`. Fica para depois: cancelamento de nota, contingência offline, regime normal, credenciais por organização.
+
+## Acessos (fase 6)
+
+O dono vê quem entra no mercado e quando. Um leitor (por exemplo um leitor facial) manda cada entrada para o Market77; o Market77 **nunca guarda imagem nem template facial**, só o identificador da pessoa e a hora. O nome vem de um cadastro sincronizado com o leitor.
+
+1. Em **Mercados**, abra o mercado e entre em **Acessos** (só o dono vê esta tela). Cadastre um **leitor** e copie o token: ele aparece uma única vez.
+2. O leitor envia cada entrada com o token:
+
+```bash
+curl -X POST http://localhost:3000/api/access/events \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"occurredAt":"2026-10-05T14:30:00-03:00","eventId":"abc123","personId":"u-42"}'
+```
+
+   `eventId` (opcional) evita duplicar a mesma entrada; `personId` (opcional) é o identificador da pessoa no leitor. Só esses campos são guardados. A data pode ter até 5 minutos de adiantamento e 7 dias de atraso.
+3. A lista de pessoas é puxada do leitor pela chamada de cada minuto da rota `POST /api/internal/reconcile` (que também responde `access: { synced, purged }`): cada leitor é sincronizado a cada 10 minutos. Quem some da lista do leitor fica inativo.
+4. A tela mostra o resumo por dia (entradas, pessoas, vendas pagas e vendas por entrada, no fuso do mercado), as entradas por hora de um dia, os acessos recentes com o nome, as pessoas e os leitores (com o erro da última sincronização, se houver).
+5. **Esquecer pessoa** (pedido de exclusão) apaga o nome, tira o identificador dos acessos antigos e impede a sincronização de recriar a pessoa.
+6. Os acessos ficam 90 dias; a limpeza roda na mesma chamada de cada minuto.
+
+Rosto é dado biométrico, dado pessoal sensível pela LGPD: a base legal (em geral consentimento específico dos moradores) e o aviso a eles são responsabilidade de quem opera o condomínio.
+
+Ainda não há leitor escolhido: em desenvolvimento a lista de pessoas é simulada (`ACCESS_PROVIDER=fake`):
+
+```bash
+curl -X POST http://localhost:3000/api/dev/fake-access/people \
+  -d '{"sourceId":"<id do leitor>","people":[{"externalId":"u-42","name":"Ana Souza"}]}'
+curl -X POST http://localhost:3000/api/dev/fake-access/mode -d '{"mode":"down"}'   # ok | down
+```
+
+O `fake` e essas rotas recusam funcionar com `NODE_ENV=production`. Um leitor real implementa `AccessProvider` (`src/access/provider.ts`) e passa na suíte de contrato `tests/access/access-contract.ts`. Fica para depois: abrir a porta, câmeras, eventos de saída e de acesso negado.
 
 ## Testes
 
