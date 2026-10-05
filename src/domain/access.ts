@@ -1,9 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { SourceAuth } from "@/access/auth";
-import type { Tx } from "@/db/tenant";
+import type { AccessProvider } from "@/access/provider";
+import { getAccessProvider } from "@/access/registry";
+import { adminSql } from "@/db/client";
+import { type Tx, withOrg } from "@/db/tenant";
 import { AppError, isForeignKeyViolation, isInsufficientPrivilege } from "@/lib/errors";
 import { parse } from "@/lib/validate";
+import { withTimeout } from "@/payments/provider";
 
 export const hashAccessToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 
@@ -79,4 +83,89 @@ export async function recordAccessEvent(
   if (!row) return { id: null, duplicate: true };
   await tx`update access_sources set last_event_at = ${now} where id = ${auth.sourceId}`;
   return { id: row.id as string, duplicate: false };
+}
+
+export const SYNC_INTERVAL_MS = 10 * 60_000;
+const CHUNK = 500;
+
+const Person = z.object({ externalId: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(120) });
+
+/** Valid entries only; the first of a repeated id wins. */
+function cleanPeople(listed: unknown[]): { externalId: string; name: string }[] {
+  const seen = new Map<string, { externalId: string; name: string }>();
+  for (const p of listed) {
+    const r = Person.safeParse(p);
+    if (r.success && !seen.has(r.data.externalId)) seen.set(r.data.externalId, r.data);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * One sync of one reader, under a row lock that other processors skip.
+ * ponytail: the provider call runs inside the transaction, like the other providers; the 5 s timeout bounds the lock.
+ */
+async function syncOne(tx: Tx, id: string, provider: AccessProvider, now: Date): Promise<boolean> {
+  const due = new Date(now.getTime() - SYNC_INTERVAL_MS);
+  const [s] = await tx`
+    select id, org_id, market_id, name from access_sources
+    where id = ${id} and revoked_at is null and (last_sync_at is null or last_sync_at <= ${due})
+    for update skip locked`;
+  if (!s) return false;
+  try {
+    const listed = await withTimeout(
+      provider.listPeople({ id, marketId: s.market_id as string, name: s.name as string }),
+    );
+    const people = cleanPeople(listed as unknown[]);
+    // A savepoint: a SQL error here must not abort the transaction that records the failure below.
+    await tx.savepoint(async (sp) => {
+      for (let i = 0; i < people.length; i += CHUNK) {
+        const rows = people.slice(i, i + CHUNK).map((p) => ({ external_id: p.externalId, name: p.name }));
+        await sp`
+          insert into access_people (org_id, source_id, external_id, name, active, synced_at)
+          select ${s.org_id as string}, ${id}, x.external_id, x.name, true, ${now}
+          from jsonb_to_recordset(${sp.json(rows)}) as x(external_id text, name text)
+          on conflict (source_id, external_id) do update set
+            name = case when access_people.forgotten_at is not null then null else excluded.name end,
+            active = (access_people.forgotten_at is null),
+            synced_at = excluded.synced_at`;
+      }
+      const ids = people.map((p) => p.externalId);
+      if (ids.length === 0) {
+        await sp`update access_people set active = false where source_id = ${id} and active`;
+      } else {
+        await sp`
+          update access_people set active = false
+          where source_id = ${id} and active and external_id not in ${sp(ids)}`;
+      }
+      await sp`update access_sources set last_sync_at = ${now}, last_sync_error = null where id = ${id}`;
+    });
+  } catch (e) {
+    const why = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    await tx`update access_sources set last_sync_at = ${now}, last_sync_error = ${why} where id = ${id}`;
+  }
+  return true;
+}
+
+/** Syncs every reader that is due. Meant for POST /api/internal/reconcile, once a minute. */
+export async function syncAccessSources(
+  now: Date = new Date(),
+  limit = 50,
+  provider?: AccessProvider,
+): Promise<number> {
+  const due = new Date(now.getTime() - SYNC_INTERVAL_MS);
+  const rows = await adminSql`
+    select id, org_id from access_sources
+    where revoked_at is null and (last_sync_at is null or last_sync_at <= ${due})
+    order by last_sync_at nulls first limit ${limit}`;
+  if (rows.length === 0) return 0;
+  const p = provider ?? getAccessProvider();
+  let done = 0;
+  for (const r of rows) {
+    try {
+      if (await withOrg(r.org_id as string, (tx) => syncOne(tx, r.id as string, p, now))) done++;
+    } catch (e) {
+      console.error("access sync failed for source", r.id, e); // one bad reader must not stop the others
+    }
+  }
+  return done;
 }
