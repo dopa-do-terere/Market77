@@ -11,7 +11,7 @@ const TABLES = [
   "terminal_commands", "agent_releases",
   "fiscal_documents", "payments", "sale_items", "sales", "terminals",
   "stock_lots", "stock_movements", "market_products", "product_barcodes", "products",
-  "markets", "memberships", "sessions", "users", "organizations",
+  "markets", "memberships", "sessions", "users", "provider_credentials", "organizations",
 ];
 
 export async function resetDb(): Promise<void> {

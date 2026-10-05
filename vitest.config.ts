@@ -14,6 +14,7 @@ const env = {
   FAKE_CARD_SECRET: "test-fake-card-secret",
   FISCAL_PROVIDER: "fake",
   ACCESS_PROVIDER: "fake",
+  CREDENTIALS_KEY: Buffer.alloc(32, 7).toString("base64"),
 };
 Object.assign(process.env, env);
 
