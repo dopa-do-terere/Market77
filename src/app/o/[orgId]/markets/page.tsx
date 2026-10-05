@@ -3,6 +3,7 @@ import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listMarkets } from "@/domain/markets";
 import { message } from "@/lib/messages";
+import { Alert, Button, Card, Field, Input, PageHeader } from "@/ui";
 import { createMarketAction } from "./actions";
 
 export default async function MarketsPage({
@@ -17,22 +18,33 @@ export default async function MarketsPage({
   const { role } = await requireOrgPage(orgId, "catalog:read");
   const markets = await withOrg(orgId, (tx) => listMarkets(tx));
   return (
-    <main>
-      <h1>Mercados</h1>
-      {error && <p role="alert">{message(error)}</p>}
-      <ul>
-        {markets.map((m) => (
-          <li key={m.id}><a href={`/o/${orgId}/markets/${m.id}`}>{m.name}</a> {m.address}</li>
-        ))}
-      </ul>
+    <main className="space-y-6">
+      <PageHeader title="Mercados" />
+      {error && <Alert tone="danger">{message(error)}</Alert>}
+      <Card>
+        {markets.length === 0 && <p className="text-muted">Nenhum mercado cadastrado ainda.</p>}
+        <ul className="-my-4 divide-y divide-border">
+          {markets.map((m) => (
+            <li key={m.id} className="py-3">
+              <a href={`/o/${orgId}/markets/${m.id}`} className="font-medium text-link hover:underline">
+                {m.name}
+              </a>{" "}
+              <span className="text-muted">{m.address}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
       {can(role, "market:write") && (
-        <form action={createMarketAction.bind(null, orgId)}>
-          <h2>Novo mercado</h2>
-          <label>Nome <input name="name" required minLength={2} /></label>
-          <label>Endereço <input name="address" /></label>
-          <label>CNPJ <input name="cnpj" inputMode="numeric" /></label>
-          <button type="submit">Cadastrar</button>
-        </form>
+        <Card title="Novo mercado">
+          <form action={createMarketAction.bind(null, orgId)} className="grid gap-4 sm:grid-cols-3">
+            <Field label="Nome"><Input name="name" required minLength={2} /></Field>
+            <Field label="Endereço"><Input name="address" /></Field>
+            <Field label="CNPJ"><Input name="cnpj" inputMode="numeric" /></Field>
+            <div className="sm:col-span-3">
+              <Button type="submit">Cadastrar</Button>
+            </div>
+          </form>
+        </Card>
       )}
     </main>
   );

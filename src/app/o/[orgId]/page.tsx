@@ -7,6 +7,7 @@ import { listMarkets } from "@/domain/markets";
 import { countFiscalErrors, salesToday } from "@/domain/sale-queries";
 import { listLowStock } from "@/domain/stock";
 import { formatBRL } from "@/lib/money";
+import { Alert, Badge, Card, PageHeader } from "@/ui";
 
 export default async function Dashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
@@ -24,37 +25,43 @@ export default async function Dashboard({ params }: { params: Promise<{ orgId: s
     fiscalErrors: can(role, "sale:read") ? await countFiscalErrors(tx) : null,
   }));
   return (
-    <main>
-      <h1>Painel</h1>
+    <main className="space-y-6">
+      <PageHeader title="Painel" />
       {offline !== null && offline > 0 && (
-        <p role="alert">
-          <a href={`/o/${orgId}/terminals`}>
-            <strong>{offline} totem(ns) offline</strong>
+        <Alert tone="warning">
+          <a href={`/o/${orgId}/terminals`} className="font-semibold underline">
+            {offline} totem(ns) offline
           </a>
-        </p>
+        </Alert>
       )}
       {fiscalErrors !== null && fiscalErrors > 0 && (
-        <p role="alert">
-          <a href={`/o/${orgId}/sales`}>
-            <strong>{fiscalErrors} nota(s) com erro</strong>
+        <Alert tone="danger">
+          <a href={`/o/${orgId}/sales`} className="font-semibold underline">
+            {fiscalErrors} nota(s) com erro
           </a>
-        </p>
+        </Alert>
       )}
       {today && (
-        <p>
-          Vendas hoje: <strong>{formatBRL(today.totalCents)}</strong> ({today.count})
-        </p>
+        <Card>
+          <p className="text-sm font-medium text-muted">Vendas hoje</p>
+          <p className="mt-1 text-3xl font-semibold">{formatBRL(today.totalCents)}</p>
+          <p className="text-sm text-muted">{today.count} venda(s)</p>
+        </Card>
       )}
-      {markets.length === 0 && <p>Nenhum mercado cadastrado ainda.</p>}
-      <ul>
-        {markets.map((m) => (
-          <li key={m.id}>
-            <a href={`/o/${orgId}/markets/${m.id}`}>{m.name}</a>
-            {m.low.length > 0 && <strong> ({m.low.length} produto(s) com estoque baixo)</strong>}
-            {m.expired > 0 && <strong> ({m.expired} lote(s) vencido(s))</strong>}
-          </li>
-        ))}
-      </ul>
+      <Card title="Mercados">
+        {markets.length === 0 && <p className="text-muted">Nenhum mercado cadastrado ainda.</p>}
+        <ul className="-my-4 divide-y divide-border">
+          {markets.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-2 py-3">
+              <a href={`/o/${orgId}/markets/${m.id}`} className="font-medium text-link hover:underline">
+                {m.name}
+              </a>
+              {m.low.length > 0 && <Badge tone="warning">{m.low.length} produto(s) com estoque baixo</Badge>}
+              {m.expired > 0 && <Badge tone="danger">{m.expired} lote(s) vencido(s)</Badge>}
+            </li>
+          ))}
+        </ul>
+      </Card>
     </main>
   );
 }
