@@ -19,7 +19,7 @@
 | 3 | Agente do totem, heartbeat e comandos remotos |
 | 4 | Cartão na maquininha (adaptador simulado) |
 | 5A | Lote e validade |
-| 5B | NFC-e (planejada) |
+| 5B | NFC-e (provedor simulado) |
 
 Stack: Next.js 15, React 19, TypeScript, Postgres 16 (`postgres.js`, migrations em SQL puro), `zod` e `vitest`. Specs e planos de cada fase ficam em `docs/superpowers/`.
 
@@ -100,6 +100,24 @@ Em **Mercados**, ao adicionar ou atualizar um produto, marque **Controla validad
 - O totem recusa ("Produto vencido. Procure o atendimento.") um produto cujo saldo inteiro está em lotes vencidos. O produto sai da prateleira e a perda é registrada em **Movimentar**.
 
 O saldo que já existia antes de ligar o controle continua valendo como "saldo sem lote" e sai por último. A NFC-e será a fase 5B.
+
+## NFC-e (fase 5B)
+
+Cada venda paga de um mercado com **Emitir NFC-e** ligada gera uma nota fiscal, emitida em segundo plano. A venda continua paga mesmo se a nota falhar.
+
+1. Em **Mercados**, abra o mercado e preencha **Dados fiscais (NFC-e)**: CNPJ, inscrição estadual, UF e série. Só o Simples Nacional emite; o regime normal fica registrado, mas a nota vai para erro.
+2. Em **Produtos**, abra **Dados fiscais** de cada produto e informe o NCM (8 dígitos). CFOP, CSOSN, unidade e origem já vêm com valores padrão do Simples (5102, 102, UN, 0).
+3. No totem, o cliente pode tocar em **CPF na nota** antes de pagar. Sem CPF, a nota sai como consumidor não identificado.
+4. A fila é processada pela mesma chamada de cada minuto da rota `POST /api/internal/reconcile` (ela responde `{ visited, fiscal }`). Provedor fora do ar: nova tentativa em 1, 2, 4... até 60 minutos, 8 vezes; depois a nota fica **Com erro**. Dados inválidos (NCM ausente, CNPJ inválido, regime normal) ficam **Com erro** na hora.
+5. Em **Vendas**, o detalhe mostra a nota (número, chave, DANFE e a última falha) e o botão **Reemitir** para as que ficaram com erro, depois de corrigir o cadastro. A lista e a página inicial avisam quantas notas estão com erro.
+
+Ainda não há provedor fiscal escolhido: em desenvolvimento a nota é simulada (`FISCAL_PROVIDER=fake`). Para testar falhas, troque o modo do simulador:
+
+```bash
+curl -X POST http://localhost:3000/api/dev/fake-fiscal/mode -d '{"mode":"down"}'   # ok | down | reject | lost
+```
+
+O adaptador `fake` e essa rota recusam funcionar com `NODE_ENV=production`. Um provedor real implementa `FiscalProvider` (`src/fiscal/provider.ts`) e passa na suíte de contrato `tests/fiscal/fiscal-contract.ts`. Fica para depois: cancelamento de nota, contingência offline, regime normal, credenciais por organização.
 
 ## Testes
 
