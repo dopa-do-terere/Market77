@@ -139,11 +139,45 @@ describe("people sync", () => {
     await syncAccessSources(NOW);
     setFakePeople(source.id, [
       { externalId: "u2", name: "Bia" },
-      { externalId: "bad\u0000id", name: "Nul" }, // Postgres refuses a NUL byte in text
+      { externalId: "boom", name: "Falha" },
     ]);
-    expect(await syncAccessSources(minutes(10))).toBe(1);
+    await adminSql.unsafe(
+      "alter table access_people add constraint test_block check (external_id <> 'boom') not valid",
+    );
+    try {
+      expect(await syncAccessSources(minutes(10))).toBe(1);
+    } finally {
+      await adminSql.unsafe("alter table access_people drop constraint test_block");
+    }
     expect((await people(source.id)).map((p) => [p.external_id, p.active])).toEqual([["u1", true]]);
-    expect((await src(source.id)).last_sync_error).not.toBeNull();
+    const s = await src(source.id);
+    expect(s.last_sync_at).toEqual(minutes(10));
+    expect(s.last_sync_error).toMatch(/^sql error 23514$/);
+  });
+
+  it("skips entries with a NUL or a lone surrogate and syncs the rest", async () => {
+    const { source } = await setup();
+    setFakePeople(source.id, [
+      { externalId: "bad\u0000id", name: "Nul" },
+      { externalId: "u2", name: "Nome\u0000ruim" },
+      { externalId: "u3", name: "Sur\ud800" },
+      { externalId: "u4", name: "Dan" },
+    ]);
+    await syncAccessSources(NOW);
+    expect((await people(source.id)).map((p) => p.external_id)).toEqual(["u4"]);
+    expect((await src(source.id)).last_sync_error).toBeNull();
+  });
+
+  it("treats a non-array answer or a list of only invalid entries as a failure and keeps the list", async () => {
+    const { source } = await setup();
+    setFakePeople(source.id, [{ externalId: "u1", name: "Ana" }]);
+    await syncAccessSources(NOW);
+    const answer = (v: unknown): AccessProvider => ({ name: "x", listPeople: async () => v as never });
+    expect(await syncAccessSources(minutes(10), 50, answer({ people: [] }))).toBe(1);
+    expect((await src(source.id)).last_sync_error).toMatch(/no valid people/);
+    expect(await syncAccessSources(minutes(20), 50, answer([{ externalId: "", name: "" }]))).toBe(1);
+    expect((await src(source.id)).last_sync_error).toMatch(/no valid people/);
+    expect((await people(source.id)).map((p) => [p.external_id, p.active])).toEqual([["u1", true]]);
   });
 
   it("keeps going when one reader blows up", async () => {

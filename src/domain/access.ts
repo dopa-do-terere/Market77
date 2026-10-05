@@ -88,16 +88,32 @@ export async function recordAccessEvent(
 export const SYNC_INTERVAL_MS = 10 * 60_000;
 const CHUNK = 500;
 
-const Person = z.object({ externalId: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(120) });
+// Postgres refuses NUL and a lone surrogate cannot be encoded: such an entry would fail the write on every run.
+const storable = (s: string) => !/\u0000|\p{Cs}/u.test(s);
+const Person = z.object({
+  externalId: z.string().trim().min(1).max(64).refine(storable),
+  name: z.string().trim().min(1).max(120).refine(storable),
+});
 
 /** Valid entries only; the first of a repeated id wins. */
-function cleanPeople(listed: unknown[]): { externalId: string; name: string }[] {
+function cleanPeople(listed: unknown): { externalId: string; name: string }[] {
+  if (!Array.isArray(listed)) throw new Error("no valid people in the reader answer");
   const seen = new Map<string, { externalId: string; name: string }>();
   for (const p of listed) {
     const r = Person.safeParse(p);
     if (r.success && !seen.has(r.data.externalId)) seen.set(r.data.externalId, r.data);
   }
+  // A non-empty answer with nothing usable is a broken reader, not an empty one: keep the old list.
+  if (listed.length > 0 && seen.size === 0) throw new Error("no valid people in the reader answer");
   return [...seen.values()];
+}
+
+/** Error text kept on the source: never SQL text (it may carry names or ids), no NUL, at most 200 chars. */
+function errorText(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === "string") return `sql error ${code}`;
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.replace(/\u0000/g, "").slice(0, 200);
 }
 
 /**
@@ -115,7 +131,7 @@ async function syncOne(tx: Tx, id: string, provider: AccessProvider, now: Date):
     const listed = await withTimeout(
       provider.listPeople({ id, marketId: s.market_id as string, name: s.name as string }),
     );
-    const people = cleanPeople(listed as unknown[]);
+    const people = cleanPeople(listed);
     // A savepoint: a SQL error here must not abort the transaction that records the failure below.
     await tx.savepoint(async (sp) => {
       for (let i = 0; i < people.length; i += CHUNK) {
@@ -129,18 +145,14 @@ async function syncOne(tx: Tx, id: string, provider: AccessProvider, now: Date):
             active = (access_people.forgotten_at is null),
             synced_at = excluded.synced_at`;
       }
-      const ids = people.map((p) => p.externalId);
-      if (ids.length === 0) {
-        await sp`update access_people set active = false where source_id = ${id} and active`;
-      } else {
-        await sp`
-          update access_people set active = false
-          where source_id = ${id} and active and external_id not in ${sp(ids)}`;
-      }
+      // The upsert stamped synced_at = now on everyone listed (now is unique per attempt): the rest left.
+      await sp`
+        update access_people set active = false
+        where source_id = ${id} and active and synced_at is distinct from ${now}`;
       await sp`update access_sources set last_sync_at = ${now}, last_sync_error = null where id = ${id}`;
     });
   } catch (e) {
-    const why = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    const why = errorText(e);
     await tx`update access_sources set last_sync_at = ${now}, last_sync_error = ${why} where id = ${id}`;
   }
   return true;
