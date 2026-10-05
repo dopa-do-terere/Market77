@@ -7,6 +7,7 @@ import { listMarkets } from "@/domain/markets";
 import { listTerminals } from "@/domain/terminals";
 import { COMMAND_LABEL, COMMAND_STATUS_LABEL } from "@/lib/labels";
 import { message } from "@/lib/messages";
+import { Alert, Badge, Button, COMMAND_TONE, Input, PageHeader, Table } from "@/ui";
 import { TerminalForm } from "./TerminalForm";
 import { revokeTerminalAction, sendCommandAction, setTerminalDeviceAction } from "./actions";
 
@@ -34,12 +35,12 @@ export default async function TerminalsPage({
     [...history.values()].flat().map((c) => c.createdBy).filter((id): id is string => id !== null),
   );
   return (
-    <main>
-      <h1>Totens</h1>
-      {error && <p role="alert">{message(error)}</p>}
+    <main className="space-y-6">
+      <PageHeader title="Totens" />
+      {error && <Alert tone="danger">{message(error)}</Alert>}
       <TerminalForm orgId={orgId} markets={markets.map((m) => ({ id: m.id, name: m.name }))} />
-      {markets.length === 0 && <p>Cadastre um mercado antes de cadastrar um totem.</p>}
-      <table>
+      {markets.length === 0 && <Alert tone="info">Cadastre um mercado antes de cadastrar um totem.</Alert>}
+      <Table>
         <thead>
           <tr>
             <th>Nome</th><th>Mercado</th><th>Estado</th><th>Última batida</th><th>Agente</th><th>PDV</th><th>Point</th><th>Ações</th>
@@ -55,71 +56,80 @@ export default async function TerminalsPage({
                   ? "online"
                   : "offline";
             const send = (type: string) => sendCommandAction.bind(null, orgId, t.id, type);
+            const commands = history.get(t.id) ?? [];
             return [
               <tr key={t.id}>
-                <td>{t.name}</td>
+                <td className="font-medium">{t.name}</td>
                 <td>{t.marketName}</td>
-                <td>{state === "offline" ? <strong>offline</strong> : state}</td>
+                <td>
+                  <Badge tone={state === "online" ? "success" : state === "offline" ? "danger" : "neutral"}>{state}</Badge>
+                </td>
                 <td>{t.lastHeartbeatAt?.toLocaleString("pt-BR", { timeZone: t.timezone }) ?? "-"}</td>
                 <td>{t.agentVersion ?? "-"}</td>
                 <td>{t.pdvStatus === "running" ? "aberto" : t.pdvStatus === "stopped" ? "parado" : "-"}</td>
                 <td>
                   {!t.revokedAt && (
-                    <form action={setTerminalDeviceAction.bind(null, orgId, t.id)} style={{ display: "inline" }}>
-                      <input
+                    <form action={setTerminalDeviceAction.bind(null, orgId, t.id)} className="flex gap-2">
+                      <Input
                         name="pointDeviceId"
                         defaultValue={t.pointDeviceId ?? ""}
                         placeholder="sem maquininha"
                         maxLength={64}
                         pattern="[\x21-\x7e]+"
                         title="Sem espaços"
-                        size={22}
-                      />{" "}
-                      <button type="submit">Salvar</button>
+                        className="w-44"
+                      />
+                      <Button type="submit" variant="secondary">Salvar</Button>
                     </form>
                   )}
                 </td>
                 <td>
                   {!t.revokedAt && (
-                    <>
-                      <form action={send("restart_pdv")} style={{ display: "inline" }}>
-                        <button type="submit">{COMMAND_LABEL.restart_pdv}</button>
-                      </form>{" "}
-                      <form action={send("reboot")} style={{ display: "inline" }}>
-                        <button type="submit">{COMMAND_LABEL.reboot}</button>
-                      </form>{" "}
-                      {latest && (
-                        <form action={send("update")} style={{ display: "inline" }}>
-                          <button type="submit" disabled={t.agentVersion === latest.version}>
-                            {COMMAND_LABEL.update} para {latest.version}
-                          </button>
-                        </form>
-                      )}{" "}
-                      <form action={revokeTerminalAction.bind(null, orgId, t.id)} style={{ display: "inline" }}>
-                        <button type="submit">Revogar</button>
+                    <div className="flex flex-wrap gap-2">
+                      <form action={send("restart_pdv")}>
+                        <Button type="submit" variant="secondary">{COMMAND_LABEL.restart_pdv}</Button>
                       </form>
-                    </>
+                      <form action={send("reboot")}>
+                        <Button type="submit" variant="secondary">{COMMAND_LABEL.reboot}</Button>
+                      </form>
+                      {latest && (
+                        <form action={send("update")}>
+                          <Button type="submit" variant="secondary" disabled={t.agentVersion === latest.version}>
+                            {COMMAND_LABEL.update} para {latest.version}
+                          </Button>
+                        </form>
+                      )}
+                      <form action={revokeTerminalAction.bind(null, orgId, t.id)}>
+                        <Button type="submit" variant="secondary">Revogar</Button>
+                      </form>
+                    </div>
                   )}
                 </td>
               </tr>,
               <tr key={`${t.id}-history`}>
-                <td colSpan={8}>
-                  <small>
-                    {(history.get(t.id) ?? []).length === 0
-                      ? "Nenhum comando enviado."
-                      : (history.get(t.id) ?? [])
-                          .map(
-                            (c) =>
-                              `${COMMAND_LABEL[c.type]} (${emails.get(c.createdBy ?? "") ?? "desconhecido"}, ${c.createdAt.toLocaleString("pt-BR", { timeZone: t.timezone })}): ${COMMAND_STATUS_LABEL[c.status]}${c.error ? ` [${c.error}]` : ""}`,
-                          )
-                          .join(" | ")}
-                  </small>
+                <td colSpan={8} className="bg-subtle">
+                  {commands.length === 0 ? (
+                    <small className="text-muted">Nenhum comando enviado.</small>
+                  ) : (
+                    <ul className="space-y-1">
+                      {commands.map((c) => (
+                        <li key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                          <span>
+                            {COMMAND_LABEL[c.type]} ({emails.get(c.createdBy ?? "") ?? "desconhecido"},{" "}
+                            {c.createdAt.toLocaleString("pt-BR", { timeZone: t.timezone })})
+                          </span>
+                          <Badge tone={COMMAND_TONE[c.status] ?? "neutral"}>{COMMAND_STATUS_LABEL[c.status]}</Badge>
+                          {c.error && <span>[{c.error}]</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
               </tr>,
             ];
           })}
         </tbody>
-      </table>
+      </Table>
     </main>
   );
 }
