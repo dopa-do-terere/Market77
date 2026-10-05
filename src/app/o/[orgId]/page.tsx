@@ -4,14 +4,14 @@ import { withOrg } from "@/db/tenant";
 import { countOfflineTerminals } from "@/domain/agent";
 import { listExpiryAlerts } from "@/domain/lots";
 import { listMarkets } from "@/domain/markets";
-import { salesToday } from "@/domain/sale-queries";
+import { countFiscalErrors, salesToday } from "@/domain/sale-queries";
 import { listLowStock } from "@/domain/stock";
 import { formatBRL } from "@/lib/money";
 
 export default async function Dashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
   const { role } = await requireOrgPage(orgId, "stock:read");
-  const { markets, today, offline } = await withOrg(orgId, async (tx) => ({
+  const { markets, today, offline, fiscalErrors } = await withOrg(orgId, async (tx) => ({
     markets: await Promise.all(
       (await listMarkets(tx)).map(async (m) => ({
         ...m,
@@ -21,6 +21,7 @@ export default async function Dashboard({ params }: { params: Promise<{ orgId: s
     ),
     today: can(role, "sale:read") ? await salesToday(tx) : null,
     offline: can(role, "terminal:write") ? await countOfflineTerminals(tx, new Date()) : null,
+    fiscalErrors: can(role, "sale:read") ? await countFiscalErrors(tx) : null,
   }));
   return (
     <main>
@@ -29,6 +30,13 @@ export default async function Dashboard({ params }: { params: Promise<{ orgId: s
         <p role="alert">
           <a href={`/o/${orgId}/terminals`}>
             <strong>{offline} totem(ns) offline</strong>
+          </a>
+        </p>
+      )}
+      {fiscalErrors !== null && fiscalErrors > 0 && (
+        <p role="alert">
+          <a href={`/o/${orgId}/sales`}>
+            <strong>{fiscalErrors} nota(s) com erro</strong>
           </a>
         </p>
       )}

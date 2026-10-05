@@ -2,7 +2,7 @@ import { z } from "zod";
 import { withOrg } from "@/db/tenant";
 import { cancelPayment, startPayment } from "@/domain/payments";
 import { refreshSale } from "@/domain/refresh";
-import { addItemByBarcode, cancelSale, setItemQuantity } from "@/domain/sales";
+import { addItemByBarcode, cancelSale, setCustomerCpf, setItemQuantity } from "@/domain/sales";
 import { AppError } from "@/lib/errors";
 import { parse } from "@/lib/validate";
 import { message } from "@/lib/messages";
@@ -23,6 +23,7 @@ const STATUS: Record<string, number> = {
   sale_empty: 422,
   sale_too_large: 422,
   quantity_limit: 422,
+  invalid_cpf: 400,
   provider_unavailable: 503,
   command_in_progress: 409,
   release_not_found: 404,
@@ -70,6 +71,12 @@ export const setQuantityHandler = (req: Request, saleId: string, itemId: string,
     return withOrg(t.orgId, (tx) =>
       setItemQuantity(tx, ctx(t), saleId, { itemId, quantity: body?.quantity }, now),
     );
+  });
+
+export const customerHandler = (req: Request, saleId: string, now: Date = new Date()) =>
+  handle(req, async (t) => {
+    const raw = await bodyOf(req);
+    return withOrg(t.orgId, (tx) => setCustomerCpf(tx, ctx(t), saleId, raw, now));
   });
 
 const PayInput = z.object({ method: z.enum(["pix", "card"]).optional() });

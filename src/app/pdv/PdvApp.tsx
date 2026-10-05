@@ -1,7 +1,8 @@
 "use client";
 import QRCode from "qrcode";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { formatBRL } from "@/lib/money";
+import { formatCpfDraft } from "@/pdv/cpf";
 import { paymentNotice } from "@/pdv/notice";
 import { createScanner } from "@/pdv/scanner";
 import { tokenFromHash } from "@/pdv/token";
@@ -18,6 +19,7 @@ type Sale = {
   items: Item[];
   payment: Payment;
   paymentFailure: PaymentFailure;
+  customerCpfMasked: string | null;
 };
 type Result = { ok: boolean; status: number; data: Partial<Sale> & { error?: string; message?: string } };
 
@@ -59,6 +61,7 @@ const page = {
   fontFamily: "sans-serif",
   textAlign: "center" as const,
 };
+const keyButton: CSSProperties = { fontSize: 32, height: 72 };
 const bigButton = { fontSize: 28, padding: "16px 32px", minWidth: 220 };
 
 function Screen({ title, children }: { title: string; children?: ReactNode }) {
@@ -80,6 +83,8 @@ export default function PdvApp() {
   const [now, setNow] = useState(Date.now());
   const [draft, setDraft] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [keypad, setKeypad] = useState(false);
+  const [cpfDraft, setCpfDraft] = useState("");
   const saleRef = useRef<Sale | null>(null);
   saleRef.current = sale;
   const scanChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -87,6 +92,10 @@ export default function PdvApp() {
   const flashTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const applySale = useCallback((s: Sale | null) => {
+    if (!s || s.status !== "open") {
+      setKeypad(false);
+      setCpfDraft("");
+    }
     saleRef.current = s;
     setSale(s);
   }, []);
@@ -263,6 +272,16 @@ export default function PdvApp() {
     applySale(null);
   }
 
+  async function saveCpf(cpf: string | null) {
+    if (!sale) return;
+    const r = await run("PUT", `/sales/${sale.id}/customer`, { cpf });
+    if (r?.ok) {
+      applySale(r.data as Sale);
+      setKeypad(false);
+      setCpfDraft("");
+    } else if (r) flash(r.data.message ?? "Erro inesperado.");
+  }
+
   if (token === undefined) return null;
   if (!token) {
     return (
@@ -324,6 +343,45 @@ export default function PdvApp() {
       </Screen>
     );
   }
+  if (keypad) {
+    return (
+      <Screen title="CPF na nota">
+        <p style={{ fontSize: 36, letterSpacing: 2, minHeight: 48 }}>{formatCpfDraft(cpfDraft) || "Digite o CPF"}</p>
+        {notice && <p role="alert">{notice}</p>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 96px)", gap: 12, justifyContent: "center" }}>
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+            <button key={d} style={keyButton} onClick={() => setCpfDraft((v) => (v + d).slice(0, 11))}>
+              {d}
+            </button>
+          ))}
+          <button style={keyButton} onClick={() => setCpfDraft((v) => v.slice(0, -1))} aria-label="Apagar">
+            Apagar
+          </button>
+          <button style={keyButton} onClick={() => setCpfDraft((v) => (v + "0").slice(0, 11))}>
+            0
+          </button>
+          <button style={keyButton} onClick={() => setCpfDraft("")}>
+            Limpar
+          </button>
+        </div>
+        <button style={bigButton} onClick={() => saveCpf(cpfDraft)} disabled={cpfDraft.length !== 11}>
+          Confirmar
+        </button>
+        <button style={{ ...bigButton, fontSize: 20 }} onClick={() => saveCpf(null)}>
+          Sem CPF
+        </button>
+        <button
+          style={{ ...bigButton, fontSize: 20 }}
+          onClick={() => {
+            setKeypad(false);
+            setCpfDraft("");
+          }}
+        >
+          Voltar
+        </button>
+      </Screen>
+    );
+  }
   return (
     <Screen title="Seu carrinho">
       {paymentNotice(sale) && <p role="alert">{paymentNotice(sale)}</p>}
@@ -346,6 +404,10 @@ export default function PdvApp() {
       <p>
         <strong>Total: {formatBRL(sale.totalCents)}</strong>
       </p>
+      <p>{sale.customerCpfMasked ? `CPF na nota: ${sale.customerCpfMasked}` : "Sem CPF na nota"}</p>
+      <button style={{ ...bigButton, fontSize: 20 }} onClick={() => setKeypad(true)}>
+        {sale.customerCpfMasked ? "Alterar CPF" : "CPF na nota"}
+      </button>
       <button style={bigButton} onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
         Pagar com Pix
       </button>

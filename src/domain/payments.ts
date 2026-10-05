@@ -6,6 +6,7 @@ import type { CardProvider } from "@/payments/card";
 import { type PaymentProvider, withTimeout } from "@/payments/provider";
 import { getCardProvider } from "@/payments/registry";
 import { type SaleView, type TerminalCtx, getSaleView, lockSale, reopenSale } from "./sales";
+import { enqueueFiscalDocument } from "./fiscal";
 import { debitSale } from "./stock";
 
 export const QR_TTL_MS = 3 * 60_000;
@@ -172,6 +173,7 @@ export async function confirmPayment(
     returning method, external_id`;
   await tx`update sales set status = 'paid', paid_at = ${now} where id = ${sale.id}`;
   await debitSale(tx, sale.id as string);
+  await enqueueFiscalDocument(tx, sale.id as string, now);
   for (const e of ended) {
     if (e.method !== "card") continue;
     // ponytail: best-effort stop of the machine, no retry; a charge it still approves is rejected above.

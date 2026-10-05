@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { redirectOnAppError } from "@/app/action-utils";
 import { requireOrg } from "@/auth/guard";
 import { withOrg } from "@/db/tenant";
+import { updateMarketFiscal } from "@/domain/markets";
 import { setMarketProduct } from "@/domain/market-products";
 import { recordMovement } from "@/domain/stock";
 import { AppError } from "@/lib/errors";
@@ -45,6 +46,27 @@ export async function moveStockAction(orgId: string, marketId: string, marketPro
         note: raw.note,
         expiresOn: raw.expiresOn,
         lotId: raw.lotId,
+      }),
+    );
+  } catch (e) {
+    redirectOnAppError(e, path);
+  }
+  redirect(path);
+}
+
+export async function updateMarketFiscalAction(orgId: string, marketId: string, fd: FormData) {
+  const path = `/o/${orgId}/markets/${marketId}`;
+  try {
+    await requireOrg(orgId, "market:write");
+    const raw = formToObject(fd);
+    await withOrg(orgId, (tx) =>
+      updateMarketFiscal(tx, marketId, {
+        nfceEnabled: raw.nfceEnabled === "on",
+        cnpj: raw.cnpj,
+        stateRegistration: raw.stateRegistration,
+        uf: raw.uf,
+        taxRegime: raw.taxRegime,
+        nfceSeries: raw.nfceSeries ? Number(raw.nfceSeries) : undefined,
       }),
     );
   } catch (e) {
