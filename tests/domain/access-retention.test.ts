@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
-import { ACCESS_RETENTION_DAYS, forgetAccessPerson, purgeAccessEvents } from "@/domain/access";
+import { setFakePeople } from "@/access/fake-access";
+import { ACCESS_RETENTION_DAYS, forgetAccessPerson, purgeAccessEvents, syncAccessSources } from "@/domain/access";
 import { codeOf, makeOrg, resetDb, seedAccessEvent, seedAccessSource, seedPerson, seedStore } from "../helpers";
 
 beforeEach(resetDb);
@@ -45,6 +46,47 @@ describe("retention", () => {
     expect(left.occurred_at).toEqual(daysAgo(92));
     expect(await purgeAccessEvents(NOW, 2)).toBe(1);
     expect(await purgeAccessEvents(NOW, 2)).toBe(0);
+  });
+});
+
+describe("retention of people", () => {
+  const person = async (orgId: string, sourceId: string, ext: string, o: { active?: boolean; forgotten?: boolean; syncedDaysAgo: number }) => {
+    const id = await seedPerson(orgId, sourceId, ext, `Nome ${ext}`, o);
+    await adminSql`update access_people set synced_at = ${daysAgo(o.syncedDaysAgo)}, created_at = ${daysAgo(200)} where id = ${id}`;
+    return id;
+  };
+  const left = async () => (await adminSql`select external_id from access_people order by external_id`).map((r) => r.external_id);
+
+  it("deletes people who left the reader or whose reader was revoked, after the window", async () => {
+    const { orgId, marketId, source } = await setup();
+    const revoked = await seedAccessSource(orgId, marketId, { name: "Leitor 2", revoked: true });
+    await person(orgId, source.id, "inactive-old", { active: false, syncedDaysAgo: 91 });
+    await person(orgId, source.id, "inactive-recent", { active: false, syncedDaysAgo: 10 });
+    await person(orgId, source.id, "active-old", { active: true, syncedDaysAgo: 91 });
+    await person(orgId, revoked.id, "revoked-old", { active: true, syncedDaysAgo: 91 });
+    await person(orgId, revoked.id, "revoked-recent", { active: true, syncedDaysAgo: 10 });
+    await person(orgId, source.id, "forgotten-old", { active: false, forgotten: true, syncedDaysAgo: 91 });
+    expect(await purgeAccessEvents(NOW)).toBe(0); // the count is still about events
+    expect(await left()).toEqual(["active-old", "forgotten-old", "inactive-recent", "revoked-recent"]);
+  });
+
+  it("uses created_at when the person was never synced", async () => {
+    const { orgId, source } = await setup();
+    const id = await seedPerson(orgId, source.id, "u1", "Ana", { active: false });
+    await adminSql`update access_people set created_at = ${daysAgo(91)} where id = ${id}`;
+    await purgeAccessEvents(NOW);
+    expect(await left()).toEqual([]);
+  });
+
+  it("brings a deleted person back when the reader lists her again", async () => {
+    const { orgId, source } = await setup();
+    await person(orgId, source.id, "u1", { active: false, syncedDaysAgo: 91 });
+    await purgeAccessEvents(NOW);
+    expect(await left()).toEqual([]);
+    setFakePeople(source.id, [{ externalId: "u1", name: "Ana" }]);
+    expect(await syncAccessSources(NOW)).toBe(1);
+    const [p] = await adminSql`select name, active from access_people where external_id = 'u1'`;
+    expect([p.name, p.active]).toEqual(["Ana", true]);
   });
 });
 

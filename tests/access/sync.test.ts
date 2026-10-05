@@ -192,7 +192,7 @@ describe("people sync", () => {
       },
     };
     expect(await syncAccessSources(NOW, 50, provider)).toBe(2);
-    expect((await src(a.id)).last_sync_error).toBe("boom");
+    expect((await src(a.id)).last_sync_error).toBe("provider error");
     expect((await people(b.id)).map((p) => p.external_id)).toEqual(["u9"]);
   });
 

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { SourceAuth } from "@/access/auth";
-import type { AccessProvider } from "@/access/provider";
+import { AccessUnavailable, type AccessProvider } from "@/access/provider";
 import { getAccessProvider } from "@/access/registry";
 import { adminSql } from "@/db/client";
 import { type Tx, withOrg } from "@/db/tenant";
@@ -46,14 +46,14 @@ export async function revokeAccessSource(tx: Tx, sourceId: string): Promise<void
 export const MAX_FUTURE_MS = 5 * 60_000;
 export const MAX_PAST_MS = 7 * 86_400_000;
 
-// Postgres refuses NUL in text (22021): reject it as bad input instead of a 500.
-const NO_NUL = /^[^\u0000]*$/;
+// Postgres refuses NUL (22021) and a lone surrogate would be stored as another id: reject both as bad input.
+const storable = (s: string) => !/\u0000|\p{Cs}/u.test(s);
 
 // zod drops unknown keys: nothing but these four fields is ever stored.
 const EventInput = z.object({
   occurredAt: z.string().datetime({ offset: true }),
-  eventId: z.string().min(1).max(64).regex(NO_NUL).optional(),
-  personId: z.string().min(1).max(64).regex(NO_NUL).optional(),
+  eventId: z.string().min(1).max(64).refine(storable).optional(),
+  personId: z.string().min(1).max(64).refine(storable).optional(),
   kind: z.literal("entry").optional(),
 });
 
@@ -69,12 +69,17 @@ export async function recordAccessEvent(
   if (at.getTime() > now.getTime() + MAX_FUTURE_MS || at.getTime() < now.getTime() - MAX_PAST_MS) {
     throw new AppError("invalid_input", "occurredAt out of range");
   }
+  // Lock order as in the sync: reader first, then person. The reader lock also waits for a revocation in flight.
+  const [src] = await tx`select revoked_at from access_sources where id = ${auth.sourceId} for no key update`;
+  if (!src || src.revoked_at) throw new AppError("source_revoked");
   let personId = e.personId ?? null;
   if (personId) {
-    const [forgotten] = await tx`
-      select 1 from access_people
-      where source_id = ${auth.sourceId} and external_id = ${personId} and forgotten_at is not null`;
-    if (forgotten) personId = null; // she asked to be forgotten: no identifier is kept
+    // FOR SHARE (not KEY SHARE) conflicts with the forgetting UPDATE: either we wait for it and see forgotten_at,
+    // or it waits for us and then anonymizes this entry. The filter stays out of WHERE so the lock is always taken.
+    const [p] = await tx`
+      select forgotten_at is not null as forgotten from access_people
+      where source_id = ${auth.sourceId} and external_id = ${personId} for share`;
+    if (p?.forgotten) personId = null; // she asked to be forgotten: no identifier is kept
   }
   const [row] = await tx`
     insert into access_events (org_id, market_id, source_id, occurred_at, person_external_id, event_id)
@@ -89,32 +94,36 @@ export async function recordAccessEvent(
 export const SYNC_INTERVAL_MS = 10 * 60_000;
 const CHUNK = 500;
 
-// Postgres refuses NUL and a lone surrogate cannot be encoded: such an entry would fail the write on every run.
-const storable = (s: string) => !/\u0000|\p{Cs}/u.test(s);
+// Not storable (see above): such an entry would fail the write on every run.
 const Person = z.object({
   externalId: z.string().trim().min(1).max(64).refine(storable),
   name: z.string().trim().min(1).max(120).refine(storable),
 });
 
+const NO_PEOPLE = "no valid people in the reader answer";
+
 /** Valid entries only; the first of a repeated id wins. */
 function cleanPeople(listed: unknown): { externalId: string; name: string }[] {
-  if (!Array.isArray(listed)) throw new Error("no valid people in the reader answer");
+  if (!Array.isArray(listed)) throw new Error(NO_PEOPLE);
   const seen = new Map<string, { externalId: string; name: string }>();
   for (const p of listed) {
     const r = Person.safeParse(p);
     if (r.success && !seen.has(r.data.externalId)) seen.set(r.data.externalId, r.data);
   }
   // A non-empty answer with nothing usable is a broken reader, not an empty one: keep the old list.
-  if (listed.length > 0 && seen.size === 0) throw new Error("no valid people in the reader answer");
+  if (listed.length > 0 && seen.size === 0) throw new Error(NO_PEOPLE);
   return [...seen.values()];
 }
 
-/** Error text kept on the source: never SQL text (it may carry names or ids), no NUL, at most 200 chars. */
+/** Error text kept on the source: fixed texts only, never a raw message (SQL or provider text may carry names). */
 function errorText(e: unknown): string {
   const code = (e as { code?: unknown } | null)?.code;
-  if (typeof code === "string") return `sql error ${code}`;
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.replace(/\u0000/g, "").slice(0, 200);
+  // Only a SQLSTATE-shaped code: any other "code" could come from a provider and carry anything.
+  if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return `sql error ${code}`;
+  if (e instanceof AccessUnavailable) return "reader unavailable";
+  const msg = e instanceof Error ? e.message : "";
+  if (msg === "provider timeout" || msg === NO_PEOPLE) return msg;
+  return "provider error";
 }
 
 /**
@@ -192,6 +201,13 @@ export async function purgeAccessEvents(now: Date = new Date(), limit = 5000): P
     delete from access_events where id in (
       select id from access_events where occurred_at < ${cutoff} order by occurred_at limit ${limit}
     ) returning id`;
+  // Names of people who left the reader, or of a revoked reader (never synced again), go too.
+  // Forgotten people stay: the sync must find them to never bring them back.
+  await adminSql`
+    delete from access_people
+    where forgotten_at is null
+      and (not active or source_id in (select id from access_sources where revoked_at is not null))
+      and coalesce(synced_at, created_at) < ${cutoff}`;
   return rows.length;
 }
 
@@ -308,22 +324,23 @@ export type DailyAccessRow = {
  */
 export async function dailyAccessSummary(tx: Tx, marketId: string, now: Date, days = 14): Promise<DailyAccessRow[]> {
   const rows = await tx`
-    with m as (select timezone as tz from markets where id = ${marketId}),
-    d as (
-      select gs::date as day
-      from m, generate_series(
-        ((${now}::timestamptz at time zone m.tz)::date - ${days - 1}::int),
-        (${now}::timestamptz at time zone m.tz)::date,
-        interval '1 day') gs
+    with m as (
+      select timezone as tz, ((${now}::timestamptz at time zone timezone)::date - ${days - 1}::int) as first_day
+      from markets where id = ${marketId}
     ),
+    d as (select m.first_day + g as day from m, generate_series(0, ${days - 1}) g),
     e as (
       select (ev.occurred_at at time zone m.tz)::date as day, count(*)::int as entries,
         count(distinct (ev.source_id, ev.person_external_id)) filter (where ev.person_external_id is not null)::int as people
-      from access_events ev, m where ev.market_id = ${marketId} group by 1
+      from access_events ev, m
+      where ev.market_id = ${marketId} and ev.occurred_at >= (m.first_day::timestamp at time zone m.tz)
+      group by 1
     ),
     s as (
       select (sa.paid_at at time zone m.tz)::date as day, count(*)::int as paid
-      from sales sa, m where sa.market_id = ${marketId} and sa.status = 'paid' group by 1
+      from sales sa, m
+      where sa.market_id = ${marketId} and sa.status = 'paid' and sa.paid_at >= (m.first_day::timestamp at time zone m.tz)
+      group by 1
     )
     select to_char(d.day, 'YYYY-MM-DD') as day, coalesce(e.entries, 0) as entries,
       coalesce(e.people, 0) as people, coalesce(s.paid, 0) as paid_sales

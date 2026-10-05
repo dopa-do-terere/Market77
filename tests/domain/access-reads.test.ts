@@ -116,6 +116,25 @@ describe("daily summary", () => {
   });
 });
 
+describe("daily summary window", () => {
+  it("ignores entries and paid sales older than the first day", async () => {
+    const { orgId, store, marketId, source } = await setup();
+    // 2026-09-22 is the first of the 14 days; 02:30Z on the 22nd is still the 21st in Sao Paulo.
+    const before = new Date("2026-09-22T02:30:00Z");
+    const first = new Date("2026-09-22T03:30:00Z");
+    await seedAccessEvent(orgId, marketId, source.id, { at: before });
+    await seedAccessEvent(orgId, marketId, source.id, { at: first });
+    await seedSellable(orgId, store.marketId, { barcode: "7891000100103", priceCents: 500 });
+    await paidSale(orgId, store, "7891000100103", 1, { now: before });
+    await paidSale(orgId, store, "7891000100103", 1, { now: first });
+    const rows = await withOrg(orgId, (tx) => dailyAccessSummary(tx, marketId, NOW));
+    expect(rows.map((r) => r.day)).not.toContain("2026-09-21");
+    expect(rows.reduce((n, r) => n + r.entries, 0)).toBe(1);
+    expect(rows.reduce((n, r) => n + r.paidSales, 0)).toBe(1);
+    expect(rows.find((r) => r.day === "2026-09-22")).toMatchObject({ entries: 1, paidSales: 1 });
+  });
+});
+
 describe("hourly access", () => {
   it("returns 24 hours of the chosen local day", async () => {
     const { orgId, marketId, source } = await setup();

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eventHandler } from "@/access/http";
+import type { AccessProvider } from "@/access/provider";
 import { adminSql } from "@/db/client";
+import { withOrg } from "@/db/tenant";
+import { forgetAccessPerson, recordAccessEvent, revokeAccessSource, syncAccessSources } from "@/domain/access";
 import { makeOrg, resetDb, seedAccessSource, seedPerson, seedStore } from "../helpers";
 
 beforeEach(resetDb);
@@ -109,6 +112,8 @@ describe("event ingestion", () => {
     await bad({ occurredAt: iso(0), eventId: 7 });
     await bad({ occurredAt: iso(0), personId: "a\u0000b" });
     await bad({ occurredAt: iso(0), eventId: "a\u0000b" });
+    await bad({ occurredAt: iso(0), personId: "a\ud800b" });
+    await bad({ occurredAt: iso(0), eventId: "a\udc00" });
     await bad(undefined, "{");
     await bad(undefined, "null");
     expect(await events()).toHaveLength(0);
@@ -179,5 +184,90 @@ describe("event ingestion", () => {
     await seedPerson(orgId, other.id, "u1", "Ana", { forgotten: true });
     await send(source.token, { occurredAt: iso(0), personId: "u1" });
     expect((await events()).map((e) => e.person_external_id)).toEqual(["u1"]);
+  });
+});
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function gate() {
+  let open!: () => void;
+  const wait = new Promise<void>((r) => (open = r));
+  return { wait, open };
+}
+
+describe("event ingestion under concurrency", () => {
+  it("waits for a forgetting in progress and then stores no identifier", async () => {
+    const { orgId, source } = await setup();
+    const personId = await seedPerson(orgId, source.id, "u1", "Ana");
+    const g = gate();
+    const forget = withOrg(orgId, async (tx) => {
+      await forgetAccessPerson(tx, personId, NOW);
+      await g.wait;
+    });
+    await sleep(50);
+    const ingest = send(source.token, { occurredAt: iso(0), personId: "u1" });
+    await sleep(200);
+    g.open();
+    const [, res] = await Promise.all([forget, ingest]);
+    expect(res.status).toBe(201);
+    expect((await events()).map((e) => e.person_external_id)).toEqual([null]);
+  });
+
+  it("anonymizes an entry stored while the person was being forgotten", async () => {
+    const { orgId, marketId, source } = await setup();
+    const personId = await seedPerson(orgId, source.id, "u1", "Ana");
+    const auth = { sourceId: source.id, orgId, marketId };
+    const g = gate();
+    const ingest = withOrg(orgId, async (tx) => {
+      await recordAccessEvent(tx, auth, { occurredAt: iso(0), personId: "u1" }, NOW);
+      await g.wait;
+    });
+    await sleep(50);
+    const forget = withOrg(orgId, (tx) => forgetAccessPerson(tx, personId, NOW));
+    await sleep(200);
+    g.open();
+    await Promise.all([ingest, forget]);
+    expect((await events()).map((e) => e.person_external_id)).toEqual([null]);
+  });
+
+  it("does not deadlock with a sync that holds the reader while it lists people", async () => {
+    const { orgId, source } = await setup();
+    await seedPerson(orgId, source.id, "u1", "Ana");
+    const g = gate();
+    let listing!: () => void;
+    const listed = new Promise<void>((r) => (listing = r));
+    const provider: AccessProvider = {
+      name: "slow",
+      listPeople: async () => {
+        listing();
+        await g.wait;
+        return [{ externalId: "u1", name: "Ana" }];
+      },
+    };
+    const sync = syncAccessSources(NOW, 50, provider);
+    await listed;
+    const ingest = send(source.token, { occurredAt: iso(0), personId: "u1" });
+    await sleep(200);
+    g.open();
+    const [n, res] = await Promise.all([sync, ingest]);
+    expect([n, res.status]).toEqual([1, 201]);
+    const [s] = await adminSql`select last_sync_error from access_sources where id = ${source.id}`;
+    expect(s.last_sync_error).toBeNull();
+    expect((await events()).map((e) => e.person_external_id)).toEqual(["u1"]);
+  });
+
+  it("refuses an entry of a reader revoked while the request was in flight", async () => {
+    const { orgId, source } = await setup();
+    const g = gate();
+    const revoke = withOrg(orgId, async (tx) => {
+      await revokeAccessSource(tx, source.id);
+      await g.wait;
+    });
+    await sleep(50);
+    const ingest = send(source.token, { occurredAt: iso(0) });
+    await sleep(200);
+    g.open();
+    const [, res] = await Promise.all([revoke, ingest]);
+    expect([res.status, (await json(res)).error]).toEqual([401, "source_revoked"]);
+    expect(await events()).toHaveLength(0);
   });
 });
