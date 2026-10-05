@@ -1,12 +1,13 @@
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { confirmPayment, startPayment } from "@/domain/payments";
 import { addItemByBarcode } from "@/domain/sales";
 import { fakeProvider } from "@/payments/fake";
 
 const TABLES = [
+  "access_events", "access_people", "access_sources",
   "terminal_commands", "agent_releases",
   "fiscal_documents", "payments", "sale_items", "sales", "terminals",
   "stock_lots", "stock_movements", "market_products", "product_barcodes", "products",
@@ -169,6 +170,50 @@ export async function paidSale(
   const [p] = await adminSql`select id, amount_cents from payments where sale_id = ${sale.id}`;
   await withOrg(orgId, (tx) => confirmPayment(tx, p.id as string, p.amount_cents as number, { test: true }, now));
   return sale.id;
+}
+
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** A reader (access source) of a market. The plain token is returned so tests can authenticate with it. */
+export async function seedAccessSource(
+  orgId: string,
+  marketId: string,
+  o: { name?: string; token?: string; revoked?: boolean } = {},
+): Promise<{ id: string; token: string }> {
+  const token = o.token ?? randomUUID();
+  const [s] = await adminSql`
+    insert into access_sources (org_id, market_id, name, token_hash, revoked_at)
+    values (${orgId}, ${marketId}, ${o.name ?? "Leitor 1"}, ${sha256(token)}, ${o.revoked ? new Date() : null})
+    returning id`;
+  return { id: s.id as string, token };
+}
+
+export async function seedPerson(
+  orgId: string,
+  sourceId: string,
+  externalId: string,
+  name: string,
+  o: { active?: boolean; forgotten?: boolean } = {},
+): Promise<string> {
+  const [p] = await adminSql`
+    insert into access_people (org_id, source_id, external_id, name, active, forgotten_at)
+    values (${orgId}, ${sourceId}, ${externalId}, ${o.forgotten ? null : name}, ${o.active ?? true},
+      ${o.forgotten ? new Date() : null})
+    returning id`;
+  return p.id as string;
+}
+
+export async function seedAccessEvent(
+  orgId: string,
+  marketId: string,
+  sourceId: string,
+  o: { at: Date; personId?: string | null; eventId?: string | null },
+): Promise<string> {
+  const [e] = await adminSql`
+    insert into access_events (org_id, market_id, source_id, occurred_at, person_external_id, event_id)
+    values (${orgId}, ${marketId}, ${sourceId}, ${o.at}, ${o.personId ?? null}, ${o.eventId ?? null})
+    returning id`;
+  return e.id as string;
 }
 
 export async function codeOf(p: Promise<unknown>): Promise<string | undefined> {
