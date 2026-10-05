@@ -157,6 +157,32 @@ describe("processing the queue", () => {
     expect(d.last_error).toMatch(/boom/);
   });
 
+  it("counts a SQL failure while issuing as an attempt and ends in error on the 8th", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { orgId, shop, saleId: first } = await queued();
+    const second = await paidSale(orgId, shop, shop.barcode, 1);
+    const clash = {
+      name: "clash",
+      getByRef: async () => null,
+      issueNfce: async () => ({ externalId: "same", number: 1, accessKey: "1".repeat(44), danfeUrl: "http://x" }),
+    };
+    let at = NOW;
+    expect(await processFiscalQueue(at, 50, clash)).toBe(2);
+    const statuses = [(await doc(first)).status, (await doc(second)).status].sort();
+    expect(statuses).toEqual(["issued", "pending"]);
+    const stuck = (await doc(first)).status === "pending" ? first : second;
+    let d = await doc(stuck);
+    expect([d.attempts, d.last_error]).toEqual([1, expect.stringMatching(/^retry:/)]);
+    for (let k = 2; k <= 8; k++) {
+      at = d.next_attempt_at;
+      expect(await processFiscalQueue(at, 50, clash)).toBe(1);
+      d = await doc(stuck);
+      expect(d.attempts).toBe(k);
+    }
+    expect(d.status).toBe("error");
+    expect(d.last_error).toMatch(/^unavailable:/);
+  });
+
   it("emits each document once when two processors run together", async () => {
     const { orgId, shop, saleId: first } = await queued();
     const second = await paidSale(orgId, shop, shop.barcode, 1);

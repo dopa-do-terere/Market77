@@ -107,7 +107,7 @@ async function markError(tx: Tx, id: string, attempts: number, text: string, now
 
 /**
  * One attempt at one document, under a row lock that other processors skip.
- * ponytail: the provider call runs inside the transaction, like the other providers; the 5 s timeout bounds the lock.
+ * ponytail: the provider call runs inside the transaction, like the other providers; the lock can last up to 2 x the 5 s timeout (getByRef plus issueNfce).
  */
 async function processOne(tx: Tx, id: string, provider: FiscalProvider, now: Date): Promise<boolean> {
   const [doc] = await tx`
@@ -117,27 +117,32 @@ async function processOne(tx: Tx, id: string, provider: FiscalProvider, now: Dat
   if (!doc) return false;
   const attempts = (doc.attempts as number) + 1;
   try {
-    const payload = doc.payload as FiscalPayload;
-    const invalid = validatePayload(payload);
-    if (invalid) {
-      await markError(tx, id, attempts, `${invalid.code}: ${invalid.message}`, now);
-      return true;
-    }
-    // Ask first: a lost answer must not turn into a second note.
-    const issued = (await withTimeout(provider.getByRef(id))) ?? (await withTimeout(provider.issueNfce(id, payload)));
-    await tx`
-      update fiscal_documents set status = 'issued', attempts = ${attempts}, provider = ${provider.name},
-        external_id = ${issued.externalId}, number = ${issued.number}, access_key = ${issued.accessKey},
-        danfe_url = ${issued.danfeUrl}, issued_at = ${now}, last_error = null, updated_at = ${now}
-      where id = ${id}`;
+    // Savepoint: a SQL error here must not abort the transaction the catch writes on.
+    await tx.savepoint(async (sp) => {
+      const payload = doc.payload as FiscalPayload;
+      const invalid = validatePayload(payload);
+      if (invalid) {
+        await markError(sp, id, attempts, `${invalid.code}: ${invalid.message}`, now);
+        return true;
+      }
+      // Ask first: a lost answer must not turn into a second note.
+      const issued = (await withTimeout(provider.getByRef(id))) ?? (await withTimeout(provider.issueNfce(id, payload)));
+      await sp`
+        update fiscal_documents set status = 'issued', attempts = ${attempts}, provider = ${provider.name},
+          external_id = ${issued.externalId}, number = ${issued.number}, access_key = ${issued.accessKey},
+          danfe_url = ${issued.danfeUrl}, issued_at = ${now}, last_error = null, updated_at = ${now}
+        where id = ${id}`;
+    });
   } catch (e) {
     if (e instanceof FiscalRejected) {
       await markError(tx, id, attempts, `${e.code}: ${e.message}`, now);
-    } else if (attempts >= MAX_ATTEMPTS) {
-      await markError(tx, id, attempts, `unavailable: Provedor fiscal indisponível após ${MAX_ATTEMPTS} tentativas.`, now);
     } else {
-      const next = new Date(now.getTime() + backoffMinutes(attempts) * 60_000);
       const why = e instanceof Error ? e.message : String(e);
+      if (attempts >= MAX_ATTEMPTS) {
+        await markError(tx, id, attempts, `unavailable: Provedor fiscal indisponível após ${MAX_ATTEMPTS} tentativas (${why}).`, now);
+        return true;
+      }
+      const next = new Date(now.getTime() + backoffMinutes(attempts) * 60_000);
       await tx`
         update fiscal_documents set attempts = ${attempts}, next_attempt_at = ${next},
           last_error = ${`retry: ${why}`}, updated_at = ${now}
