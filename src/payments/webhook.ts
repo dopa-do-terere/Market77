@@ -1,8 +1,13 @@
+import { z } from "zod";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
+import { readMercadoPagoCredentials } from "@/domain/credentials";
 import { confirmPayment, failPayment } from "@/domain/payments";
 import type { CardProvider } from "./card";
-import type { PaymentProvider } from "./provider";
+import { mercadoPagoPoint } from "./mercadopago-card";
+import { type Fetch, verifyNotification } from "./mercadopago-http";
+import { mercadoPagoPix } from "./mercadopago-pix";
+import { type PaymentProvider, withTimeout } from "./provider";
 import { getCardProvider, getProvider } from "./registry";
 
 type Outcome = { status: number; body: { result: string } };
@@ -87,6 +92,65 @@ export async function handleCardWebhook(
     return { status: 200, body: { result } };
   }
   const reason = event.status === "expired" ? "expired" : (event.failureReason ?? "declined");
+  const changed = await withOrg(orgId, (tx) => failPayment(tx, p.id as string, reason, now));
+  return { status: 200, body: { result: changed ? "failed" : "ignored" } };
+}
+
+/**
+ * Mercado Pago callback, one URL per organization because the signing secret is per organization.
+ * The notification only says that an id changed: after the signature is verified, state and amount come
+ * from the API, never from the body. 503 makes Mercado Pago retry when the API cannot be asked.
+ */
+export async function handleMercadoPagoWebhook(
+  kind: "pix" | "card",
+  orgId: string,
+  url: URL,
+  headers: Headers,
+  rawBody: string,
+  now: Date = new Date(),
+  f: Fetch = fetch,
+): Promise<Outcome> {
+  if (!z.string().uuid().safeParse(orgId).success) return { status: 404, body: { result: "unknown_provider" } };
+  let creds: Awaited<ReturnType<typeof readMercadoPagoCredentials>>;
+  try {
+    creds = await readMercadoPagoCredentials(orgId);
+  } catch {
+    creds = null; // cannot be decrypted: same as not connected
+  }
+  if (!creds) return { status: 404, body: { result: "unknown_provider" } };
+
+  let n: ReturnType<typeof verifyNotification>;
+  try {
+    n = verifyNotification(creds.webhookSecret, headers, rawBody, url, now);
+  } catch {
+    return { status: 401, body: { result: "invalid_webhook" } };
+  }
+  if (!n || n.kind !== (kind === "pix" ? "payment" : "order")) return { status: 200, body: { result: "ignored" } };
+
+  const [p] = await adminSql`
+    select id from payments
+    where org_id = ${orgId} and provider = 'mercadopago' and external_id = ${n.id} and method = ${kind}`;
+  if (!p) return { status: 200, body: { result: "unknown_payment" } };
+
+  let charge: Awaited<ReturnType<PaymentProvider["getCharge"]>> & { failureReason?: "declined" | "cancelled" };
+  try {
+    charge =
+      kind === "pix"
+        ? await withTimeout(mercadoPagoPix(creds, f).getCharge(n.id))
+        : await withTimeout(mercadoPagoPoint(creds, async () => null, f).getCharge(n.id));
+  } catch {
+    return { status: 503, body: { result: "provider_unavailable" } };
+  }
+
+  if (charge.status === "confirmed") {
+    const result = await withOrg(orgId, (tx) =>
+      confirmPayment(tx, p.id as string, charge.amountCents, safeJson(rawBody), now),
+    );
+    return { status: 200, body: { result } };
+  }
+  // A Pix that failed or expired is read again by the reconciliation; a card outcome acts at once.
+  if (kind === "pix" || charge.status === "pending") return { status: 200, body: { result: "ignored" } };
+  const reason = charge.status === "expired" ? "expired" : (charge.failureReason ?? "declined");
   const changed = await withOrg(orgId, (tx) => failPayment(tx, p.id as string, reason, now));
   return { status: 200, body: { result: changed ? "failed" : "ignored" } };
 }
