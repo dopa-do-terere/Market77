@@ -39,6 +39,11 @@ export default async function MarketPage({
   return (
     <main>
       <h1>Estoque do mercado</h1>
+      {can(role, "access:read") && (
+        <p>
+          <a href={`/o/${orgId}/markets/${marketId}/access`}>Acessos</a>
+        </p>
+      )}
       {error && <p role="alert">{message(error)}</p>}
       <table>
         <thead>
