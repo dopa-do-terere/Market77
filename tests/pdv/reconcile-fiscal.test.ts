@@ -18,7 +18,7 @@ it("the reconcile route also issues the pending fiscal documents", async () => {
   const res = await reconcileRoute(
     new Request("http://m77.test/api/internal/reconcile", { method: "POST", headers: { "x-reconcile-secret": "s3cret" } }),
   );
-  expect([res.status, await res.json()]).toEqual([200, { visited: 0, fiscal: 1 }]);
+  expect([res.status, await res.json()]).toEqual([200, { visited: 0, fiscal: 1, access: { synced: 0, purged: 0 } }]);
   const [d] = await adminSql`select status from fiscal_documents where sale_id = ${saleId}`;
   expect(d.status).toBe("issued");
 });

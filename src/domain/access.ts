@@ -181,3 +181,30 @@ export async function syncAccessSources(
   }
   return done;
 }
+
+export const ACCESS_RETENTION_DAYS = 90;
+
+/** Deletes entries older than the retention window, oldest first, in batches. Admin role: the app cannot delete. */
+export async function purgeAccessEvents(now: Date = new Date(), limit = 5000): Promise<number> {
+  const cutoff = new Date(now.getTime() - ACCESS_RETENTION_DAYS * 86_400_000);
+  const rows = await adminSql`
+    delete from access_events where id in (
+      select id from access_events where occurred_at < ${cutoff} order by occurred_at limit ${limit}
+    ) returning id`;
+  return rows.length;
+}
+
+/**
+ * The person asked to be forgotten: no name, no identifier on the old entries, and the sync never brings her back.
+ * Idempotent: the first forgetting time is kept.
+ */
+export async function forgetAccessPerson(tx: Tx, personId: string, now: Date): Promise<void> {
+  if (!uuid.safeParse(personId).success) throw new AppError("not_found");
+  const [p] = await tx`
+    update access_people set forgotten_at = coalesce(forgotten_at, ${now}), name = null, active = false
+    where id = ${personId} returning source_id, external_id`;
+  if (!p) throw new AppError("not_found");
+  await tx`
+    update access_events set person_external_id = null
+    where source_id = ${p.source_id as string} and person_external_id = ${p.external_id as string}`;
+}

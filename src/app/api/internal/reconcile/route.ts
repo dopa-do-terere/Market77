@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { purgeAccessEvents, syncAccessSources } from "@/domain/access";
 import { processFiscalQueue } from "@/domain/fiscal";
 import { reconcilePending } from "@/payments/reconcile";
 
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
     return new Response(null, { status: 401 });
   }
-  // One queue failing must not stop the other.
+  // One queue failing must not stop the others.
   const attempt = async (label: string, fn: () => Promise<number>): Promise<number> => {
     try {
       return await fn();
@@ -22,5 +23,7 @@ export async function POST(req: Request) {
   };
   const visited = await attempt("reconcile", () => reconcilePending());
   const fiscal = await attempt("fiscal queue", () => processFiscalQueue());
-  return Response.json({ visited, fiscal });
+  const synced = await attempt("access sync", () => syncAccessSources());
+  const purged = await attempt("access retention", () => purgeAccessEvents());
+  return Response.json({ visited, fiscal, access: { synced, purged } });
 }

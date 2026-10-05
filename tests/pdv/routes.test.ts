@@ -73,6 +73,6 @@ describe("reconcile route", () => {
     expect((await call()).status).toBe(401);
     expect((await call("wrong!")).status).toBe(401);
     const ok = await call("s3cret");
-    expect([ok.status, await ok.json()]).toEqual([200, { visited: 0, fiscal: 0 }]);
+    expect([ok.status, await ok.json()]).toEqual([200, { visited: 0, fiscal: 0, access: { synced: 0, purged: 0 } }]);
   });
 });
