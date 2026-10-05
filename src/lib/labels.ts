@@ -36,3 +36,9 @@ export const FAILURE_LABEL: Record<string, string> = {
   cancelled: "Cancelado",
   expired: "Expirado",
 };
+
+export const FISCAL_LABEL: Record<string, string> = {
+  pending: "Pendente",
+  issued: "Emitida",
+  error: "Com erro",
+};
