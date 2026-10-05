@@ -54,15 +54,10 @@ export default async function PaymentsSettingsPage({
         </>
       )}
       <h2>URLs de webhook</h2>
-      <p>No painel do Mercado Pago, cadastre estas URLs (eventos de pagamento no Pix e de order no cartão) e copie o segredo gerado para o campo acima.</p>
-      <ul>
-        <li>
-          Pix: <code>{`${base}/api/webhooks/pix/mercadopago/${orgId}`}</code>
-        </li>
-        <li>
-          Cartão: <code>{`${base}/api/webhooks/card/mercadopago/${orgId}`}</code>
-        </li>
-      </ul>
+      <p>No painel do Mercado Pago, cadastre esta URL e ative os dois tópicos nela: Pagamentos (Pix) e Orders (Mercado Pago, cartão). Copie o segredo gerado para o campo acima.</p>
+      <p>
+        <code>{`${base}/api/webhooks/mercadopago/${orgId}`}</code>
+      </p>
     </main>
   );
 }

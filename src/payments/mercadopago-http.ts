@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { MercadoPagoCredentials } from "@/domain/credentials";
+import { providerTimeout } from "./provider";
 
 export const MP_API = "https://api.mercadopago.com";
 export type Fetch = typeof fetch;
@@ -27,6 +28,8 @@ export async function mpCall(
       ...(o.idempotencyKey ? { "X-Idempotency-Key": o.idempotencyKey } : {}),
     },
     body: o.body === undefined ? undefined : JSON.stringify(o.body),
+    // Aborts the request itself (withTimeout only races), a bit before the caller gives up.
+    signal: AbortSignal.timeout(Math.max(500, providerTimeout.ms - 1000)),
   });
   if (!res.ok) throw new MercadoPagoError(res.status);
   return res.json();

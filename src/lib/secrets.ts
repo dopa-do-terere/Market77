@@ -17,9 +17,12 @@ export function encryptSecret(plain: string): string {
 
 /** Throws on a malformed or tampered blob. */
 export function decryptSecret(blob: string): string {
-  const [v, iv, tag, data] = blob.split(":");
-  if (v !== "v1" || !iv || !tag || data === undefined) throw new Error("malformed secret");
-  const d = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64"));
-  d.setAuthTag(Buffer.from(tag, "base64"));
-  return Buffer.concat([d.update(Buffer.from(data, "base64")), d.final()]).toString("utf8");
+  const parts = blob.split(":");
+  if (parts.length !== 4 || parts[0] !== "v1") throw new Error("malformed secret");
+  const iv = Buffer.from(parts[1], "base64");
+  const tag = Buffer.from(parts[2], "base64");
+  if (iv.length !== 12 || tag.length !== 16) throw new Error("malformed secret");
+  const d = createDecipheriv("aes-256-gcm", key(), iv, { authTagLength: 16 });
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(Buffer.from(parts[3], "base64")), d.final()]).toString("utf8");
 }

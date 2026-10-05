@@ -166,13 +166,13 @@ Troque a senha do papel `market77_app` (`ALTER ROLE market77_app PASSWORD '...'`
 Cada organização usa a própria conta. O dono abre **Pagamentos** no painel e cola o access token e o segredo do webhook de uma aplicação criada em "Suas integrações" do Mercado Pago. Sem credenciais, a organização usa o simulador (que recusa funcionar em produção).
 
 - Pix: `POST /v1/payments`. Cartão: Orders API da Point (`POST /v1/orders`, `type: "point"`). A maquininha de cada totem é o campo **ID da maquininha Point** em **Totens**.
-- Webhooks, um par de URLs por organização (a tela mostra as URLs prontas): `POST /api/webhooks/pix/mercadopago/<orgId>` (evento de pagamento) e `POST /api/webhooks/card/mercadopago/<orgId>` (evento de order). A assinatura `x-signature` é validada com o segredo da organização, e o estado do pagamento é sempre consultado na API.
+- Webhook, uma URL por organização (a tela mostra a URL pronta): `POST /api/webhooks/mercadopago/<orgId>`, com os tópicos Pagamentos (Pix) e Orders (Mercado Pago, cartão) ativados. O tipo da notificação verificada decide se é Pix ou cartão. As rotas antigas `/api/webhooks/pix/mercadopago/<orgId>` e `/api/webhooks/card/mercadopago/<orgId>` seguem como apelidos da mesma. A assinatura `x-signature` é validada com o segredo da organização, e o estado do pagamento é sempre consultado na API.
 - `CREDENTIALS_KEY` perdida torna as credenciais salvas ilegíveis: o dono precisa colar de novo.
 
 ### Roteiro manual (conta de teste e uma Point)
 
 1. Com `CREDENTIALS_KEY` definida e o servidor no ar, entre como dono, abra **Pagamentos**, cole token e segredo e clique em **Testar**: deve mostrar que o Mercado Pago aceitou o token.
-2. Cadastre as duas URLs de webhook no painel do Mercado Pago (Pix: pagamentos; cartão: order) e use o segredo gerado.
+2. Cadastre a URL única de webhook no painel do Mercado Pago, ative os tópicos Pagamentos e Orders (Mercado Pago) nela e use o segredo gerado.
 3. Em **Totens**, preencha o ID da Point do totem.
 4. No totem: pagar com Pix, ler o QR no app do banco e pagar: a venda fica paga e o estoque baixa uma vez.
 5. Pagar com cartão: a Point mostra o valor; aprovar, recusar (cartão de teste recusado), cancelar pelo botão do totem e deixar expirar. Confira cada desfecho na tela do totem e em **Vendas**.

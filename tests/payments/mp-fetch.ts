@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 
-export type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
+export type Call = { url: string; method: string; headers: Record<string, string>; body: unknown; signal?: boolean };
 type Reply = { status?: number; json?: unknown };
 
 /** A fetch that answers from a function and records every call. No network. */
@@ -11,6 +11,7 @@ export function fakeFetch(handler: (c: Call) => Reply) {
       url: String(input),
       method: init?.method ?? "GET",
       headers: Object.fromEntries(Object.entries((init?.headers ?? {}) as Record<string, string>)),
+      signal: init?.signal instanceof AbortSignal,
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     };
     calls.push(call);

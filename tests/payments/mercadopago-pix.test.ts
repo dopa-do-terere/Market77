@@ -47,6 +47,7 @@ describe("mercadoPagoPix", () => {
     ["pending", "pending_waiting_transfer", "pending"],
     ["in_process", undefined, "pending"],
     ["authorized", undefined, "pending"],
+    ["in_mediation", undefined, "pending"],
     ["rejected", undefined, "failed"],
     ["cancelled", "by_collector", "failed"],
     ["cancelled", "expired", "expired"],

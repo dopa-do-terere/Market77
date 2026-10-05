@@ -70,7 +70,7 @@ Os mapeamentos de estado e os campos exatos são conferidos contra a referência
 
 ## 6. Webhook por organização
 
-Rotas novas: `POST /api/webhooks/pix/mercadopago/[orgId]` e `POST /api/webhooks/card/mercadopago/[orgId]`. As rotas `/[provider]` existentes seguem só para o `fake`.
+Rota única e neutra: `POST /api/webhooks/mercadopago/[orgId]` (o Mercado Pago aceita uma URL de notificação por aplicação e modo, com vários tópicos). As rotas `/api/webhooks/pix/mercadopago/[orgId]` e `/api/webhooks/card/mercadopago/[orgId]` ficam como apelidos que chamam o mesmo tratador. O roteamento é pelo tipo da notificação já verificada (`payment` é Pix, `order` é cartão), não pela URL. As rotas `/[provider]` existentes seguem só para o `fake`.
 
 Fluxo:
 1. Lê o corpo cru e valida o `orgId` como uuid (inválido: 404).
@@ -109,3 +109,6 @@ Fluxo:
 - Estorno e devolução, parcelamento.
 - Impressão do comprovante ou da NFC-e na Point, depois do provedor fiscal real.
 - Provedor fiscal real (ver fase 5B+).
+- Resolver o provedor por `payments.provider` em vez das credenciais atuais da organização.
+- Cancelar no Mercado Pago um Pix expirado no Market77.
+- Esconder o botão de cartão no totem quando ele não tem maquininha Point (hoje responde `provider_unavailable`).

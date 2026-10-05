@@ -99,10 +99,10 @@ export async function handleCardWebhook(
 /**
  * Mercado Pago callback, one URL per organization because the signing secret is per organization.
  * The notification only says that an id changed: after the signature is verified, state and amount come
- * from the API, never from the body. 503 makes Mercado Pago retry when the API cannot be asked.
+ * from the API, never from the body. The kind of the verified notification (payment or order) picks the method
+ * and the adapter, not the URL: Mercado Pago lets one notification URL receive every topic. 503 makes Mercado Pago retry when the API cannot be asked.
  */
 export async function handleMercadoPagoWebhook(
-  kind: "pix" | "card",
   orgId: string,
   url: URL,
   headers: Headers,
@@ -125,17 +125,18 @@ export async function handleMercadoPagoWebhook(
   } catch {
     return { status: 401, body: { result: "invalid_webhook" } };
   }
-  if (!n || n.kind !== (kind === "pix" ? "payment" : "order")) return { status: 200, body: { result: "ignored" } };
+  if (!n) return { status: 200, body: { result: "ignored" } };
+  const method = n.kind === "payment" ? "pix" : "card";
 
   const [p] = await adminSql`
     select id from payments
-    where org_id = ${orgId} and provider = 'mercadopago' and external_id = ${n.id} and method = ${kind}`;
+    where org_id = ${orgId} and provider = 'mercadopago' and external_id = ${n.id} and method = ${method}`;
   if (!p) return { status: 200, body: { result: "unknown_payment" } };
 
   let charge: Awaited<ReturnType<PaymentProvider["getCharge"]>> & { failureReason?: "declined" | "cancelled" };
   try {
     charge =
-      kind === "pix"
+      method === "pix"
         ? await withTimeout(mercadoPagoPix(creds, f).getCharge(n.id))
         : await withTimeout(mercadoPagoPoint(creds, async () => null, f).getCharge(n.id));
   } catch {
@@ -149,7 +150,7 @@ export async function handleMercadoPagoWebhook(
     return { status: 200, body: { result } };
   }
   // A Pix that failed or expired is read again by the reconciliation; a card outcome acts at once.
-  if (kind === "pix" || charge.status === "pending") return { status: 200, body: { result: "ignored" } };
+  if (method === "pix" || charge.status === "pending") return { status: 200, body: { result: "ignored" } };
   const reason = charge.status === "expired" ? "expired" : (charge.failureReason ?? "declined");
   const changed = await withOrg(orgId, (tx) => failPayment(tx, p.id as string, reason, now));
   return { status: 200, body: { result: changed ? "failed" : "ignored" } };

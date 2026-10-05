@@ -44,12 +44,13 @@ const deliver = (
   reply: { status?: number; json?: unknown },
   o: { secret?: string; ts?: number; type?: string; sigId?: string } = {},
 ) => {
+  // kind only picks the URL alias; the handler routes by the verified notification type
   const { f } = fakeFetch(() => reply);
   const type = o.type ?? (kind === "pix" ? "payment" : "order");
   const rawBody = JSON.stringify({ type, action: `${type}.updated`, data: { id }, lie: { amount: 99999 } });
   const url = new URL(`https://app.example/api/webhooks/${kind}/mercadopago/${orgId}?data.id=${id}&type=${type}`);
   const headers = signNotification(SECRET, { id: o.sigId ?? id, ts: o.ts ?? ts, secretOverride: o.secret });
-  return handleMercadoPagoWebhook(kind, orgId, url, headers, rawBody, NOW, f);
+  return handleMercadoPagoWebhook(orgId, url, headers, rawBody, NOW, f);
 };
 
 const saleStatus = async (saleId: string) =>
@@ -157,8 +158,21 @@ describe("handleMercadoPagoWebhook", () => {
     const { orgId } = await awaiting("pix", "9012");
     expect((await deliver("pix", orgId, "424242", payment("approved"))).body.result).toBe("unknown_payment");
     expect((await deliver("pix", orgId, "9012", payment("approved"), { type: "merchant_order" })).body.result).toBe("ignored");
-    // a card notification on the Pix route is not a Pix event
-    expect((await deliver("pix", orgId, "9012", payment("approved"), { type: "order" })).body.result).toBe("ignored");
+  });
+
+  it("routes by the verified notification, not by the URL alias", async () => {
+    const card = await awaiting("card", "ORD9020", "A");
+    expect((await deliver("pix", card.orgId, "ORD9020", order("processed"), { type: "order" })).body.result).toBe("confirmed");
+    expect(await saleStatus(card.saleId)).toBe("paid");
+    const pix = await awaiting("pix", "9021", "B");
+    expect((await deliver("card", pix.orgId, "9021", payment("approved"), { type: "payment" })).body.result).toBe("confirmed");
+    expect(await saleStatus(pix.saleId)).toBe("paid");
+  });
+
+  it("answers unknown_payment when the notification kind does not match the stored method", async () => {
+    const { orgId, saleId } = await awaiting("card", "7777");
+    expect((await deliver("pix", orgId, "7777", payment("approved"), { type: "payment" })).body.result).toBe("unknown_payment");
+    expect(await saleStatus(saleId)).toBe("awaiting_payment");
   });
 
   it("answers 503 so Mercado Pago retries when the API cannot be asked", async () => {
@@ -179,7 +193,7 @@ describe("handleMercadoPagoWebhook", () => {
     const { orgId } = await awaiting("pix", "9015");
     const { f } = fakeFetch(() => payment("approved"));
     const url = new URL(`https://app.example/api/webhooks/pix/mercadopago/${orgId}?data.id=9015&type=payment`);
-    const r = await handleMercadoPagoWebhook("pix", orgId, url, signNotification(SECRET, { id: "9015", ts }), "null", NOW, f);
+    const r = await handleMercadoPagoWebhook(orgId, url, signNotification(SECRET, { id: "9015", ts }), "null", NOW, f);
     expect([200, 401]).toContain(r.status);
     expect(r.body.result).not.toBe("confirmed");
   });

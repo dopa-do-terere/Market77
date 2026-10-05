@@ -22,6 +22,7 @@ function toStatus(status: string, detail: string | null | undefined): ChargeStat
     case "pending":
     case "in_process":
     case "authorized":
+    case "in_mediation":
       return "pending";
     case "cancelled":
       return detail === "expired" ? "expired" : "failed";

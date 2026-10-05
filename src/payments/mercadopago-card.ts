@@ -16,6 +16,7 @@ function toState(status: string): { status: ChargeStatus; failureReason?: CardFa
     case "created":
     case "at_terminal":
     case "action_required":
+    case "processing":
       return { status: "pending" };
     case "processed":
       return { status: "confirmed" };
@@ -56,20 +57,31 @@ export function mercadoPagoPoint(
       const device = await deviceFor(terminalId);
       if (!device) throw new Error("no Point machine paired with this terminal");
       const minutes = Math.max(1, Math.ceil((expiresAt.getTime() - clock().getTime()) / 60_000));
-      const r = Created.parse(
-        await mpCall(creds, f, "POST", "/v1/orders", {
-          idempotencyKey: `${saleId}:${expiresAt.getTime()}`,
-          body: {
-            type: "point",
-            external_reference: saleId,
-            expiration_time: `PT${minutes}M`,
-            transactions: { payments: [{ amount: (amountCents / 100).toFixed(2) }] },
-            config: { point: { terminal_id: device, print_on_terminal: "no_ticket" } },
-            description: "Compra no totem",
-          },
-        }),
-      );
-      return { externalId: r.id, expiresAt };
+      const create = {
+        idempotencyKey: `${saleId}:${expiresAt.getTime()}`,
+        body: {
+          type: "point",
+          external_reference: saleId,
+          expiration_time: `PT${minutes}M`,
+          transactions: { payments: [{ amount: (amountCents / 100).toFixed(2) }] },
+          config: { point: { terminal_id: device, print_on_terminal: "no_ticket" } },
+          description: "Compra no totem",
+        },
+      };
+      try {
+        const r = Created.parse(await mpCall(creds, f, "POST", "/v1/orders", create));
+        return { externalId: r.id, expiresAt };
+      } catch (e) {
+        // The call may have timed out after Mercado Pago created the order: replay it (same idempotency key
+        // returns the order already created) and cancel it, so the machine does not wait for an unknown sale.
+        // ponytail: fire-and-forget; a process killed right after the failure can still leave an order, which
+        // expires by itself after PT2M.
+        void mpCall(creds, f, "POST", "/v1/orders", create)
+          .then((o) => Created.parse(o))
+          .then((o) => mpCall(creds, f, "POST", `/v1/orders/${encodeURIComponent(o.id)}/cancel`))
+          .catch(() => {});
+        throw e;
+      }
     },
 
     async cancelCardCharge(externalId) {

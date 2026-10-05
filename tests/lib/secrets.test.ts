@@ -20,8 +20,27 @@ describe("secrets", () => {
     expect(() => decryptSecret(parts.join(":"))).toThrow();
   });
 
+  it("fails on a tampered tag, a short tag, a wrong iv length or extra parts", () => {
+    const [v, iv, tag, data] = encryptSecret("segredo").split(":");
+    const b64 = (n: number) => Buffer.alloc(n, 1).toString("base64");
+    const bad = [
+      [v, iv, b64(16), data],
+      [v, iv, Buffer.from(tag, "base64").subarray(0, 4).toString("base64"), data],
+      [v, b64(8), tag, data],
+      [v, iv, tag, data, "x"],
+    ];
+    for (const p of bad) expect(() => decryptSecret(p.join(":"))).toThrow();
+    for (const p of bad.slice(1)) expect(() => decryptSecret(p.join(":"))).toThrow("malformed secret");
+  });
+
   it("fails on a malformed blob", () => {
     expect(() => decryptSecret("lixo")).toThrow();
+  });
+
+  it("decrypt without a key throws credentials_key_missing", () => {
+    const blob = encryptSecret("x");
+    vi.stubEnv("CREDENTIALS_KEY", "");
+    expect(() => decryptSecret(blob)).toThrow(AppError);
   });
 
   it("refuses to work without a valid key", () => {

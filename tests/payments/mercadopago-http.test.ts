@@ -18,6 +18,12 @@ describe("mpCall", () => {
     expect(calls[0].body).toEqual({ a: 1 });
   });
 
+  it("passes an abort signal so a slow call is cut", async () => {
+    const { f, calls } = fakeFetch(() => ({ json: {} }));
+    await mpCall(CREDS, f, "GET", "/x");
+    expect(calls[0].signal).toBe(true);
+  });
+
   it("throws an error that carries the status and nothing of the response", async () => {
     const { f } = fakeFetch(() => ({ status: 401, json: { message: "payer ana@example.com" } }));
     const err = (await mpCall(CREDS, f, "GET", "/x").catch((e) => e)) as MercadoPagoError;

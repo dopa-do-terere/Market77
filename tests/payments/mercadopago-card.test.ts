@@ -33,6 +33,38 @@ describe("mercadoPagoPoint", () => {
     });
   });
 
+  describe("orphan order recovery", () => {
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+
+    it("cancels the order a failed create may have left, and rethrows the original error", async () => {
+      let n = 0;
+      const { f, calls } = fakeFetch((c: Call) => {
+        if (c.url.endsWith("/cancel")) return { json: order("canceled") };
+        if (++n === 1) return { status: 504, json: { secret: "payer" } };
+        return { status: 201, json: order("created") };
+      });
+      await expect(mercadoPagoPoint(CREDS, device, f, clock).createCardCharge(args)).rejects.toThrow(
+        /mercadopago http 504/,
+      );
+      await settle();
+      expect(calls).toHaveLength(3);
+      expect(calls[1].url).toBe("https://api.mercadopago.com/v1/orders");
+      expect(calls[1].headers["X-Idempotency-Key"]).toBe(calls[0].headers["X-Idempotency-Key"]);
+      expect(calls[1].body).toEqual(calls[0].body);
+      expect(calls[2].url).toBe("https://api.mercadopago.com/v1/orders/ORD01/cancel");
+    });
+
+    it("keeps the original error when the recovery fails too", async () => {
+      let n = 0;
+      const f = (async () => {
+        throw new Error(++n === 1 ? "first failure" : "recovery failure");
+      }) as unknown as typeof fetch;
+      await expect(mercadoPagoPoint(CREDS, device, f, clock).createCardCharge(args)).rejects.toThrow(/first failure/);
+      await settle();
+      expect(n).toBe(2);
+    });
+  });
+
   it("never fixes debit or credit: the customer picks on the machine", async () => {
     const { f, calls } = fakeFetch(() => ({ json: order("created") }));
     await mercadoPagoPoint(CREDS, device, f, clock).createCardCharge(args);
@@ -56,6 +88,7 @@ describe("mercadoPagoPoint", () => {
     ["failed", {}, "failed", "declined"],
     ["refunded", {}, "failed", "cancelled"],
     ["expired", {}, "expired", undefined],
+    ["processing", {}, "pending", undefined],
   ])("maps order status %s to %s", async (status, extra, expected, reason) => {
     const { f, calls } = fakeFetch(() => ({ json: order(status, extra) }));
     const r = await mercadoPagoPoint(CREDS, device, f, clock).getCharge("ORD01");
