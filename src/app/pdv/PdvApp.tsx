@@ -92,7 +92,10 @@ export default function PdvApp() {
   const flashTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const applySale = useCallback((s: Sale | null) => {
-    if (!s || s.status !== "open") setKeypad(false);
+    if (!s || s.status !== "open") {
+      setKeypad(false);
+      setCpfDraft("");
+    }
     saleRef.current = s;
     setSale(s);
   }, []);

@@ -117,6 +117,8 @@ Ainda não há provedor fiscal escolhido: em desenvolvimento a nota é simulada 
 curl -X POST http://localhost:3000/api/dev/fake-fiscal/mode -d '{"mode":"down"}'   # ok | down | reject | lost
 ```
 
+Enquanto não houver provedor fiscal real, não ligue **Emitir NFC-e** em produção: com o simulador, cada nota fica 8 vezes indisponível por cerca de 2 horas e vira erro.
+
 O adaptador `fake` e essa rota recusam funcionar com `NODE_ENV=production`. Um provedor real implementa `FiscalProvider` (`src/fiscal/provider.ts`) e passa na suíte de contrato `tests/fiscal/fiscal-contract.ts`. Fica para depois: cancelamento de nota, contingência offline, regime normal, credenciais por organização.
 
 ## Testes

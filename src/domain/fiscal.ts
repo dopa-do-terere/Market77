@@ -64,6 +64,9 @@ export async function enqueueFiscalDocument(
 ): Promise<void> {
   try {
     await tx.savepoint(async (sp) => {
+      const [f] = await sp`
+        select m.nfce_enabled from sales s join markets m on m.id = s.market_id where s.id = ${saleId}`;
+      if (!f?.nfce_enabled) return;
       const b = await build(sp, saleId);
       if (!b.enabled) return;
       await sp`

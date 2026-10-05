@@ -70,7 +70,7 @@ describe("enqueue on payment", () => {
   it("never breaks the surrounding transaction when queueing fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const orgId = await makeOrg("A");
-    const shop = await fiscalShop(orgId, { enabled: false });
+    const shop = await fiscalShop(orgId);
     const saleId = await paidSale(orgId, shop, shop.barcode, 1);
     const bad = async (t: Tx): Promise<never> => {
       await t`select 1/0`;
@@ -82,5 +82,18 @@ describe("enqueue on payment", () => {
     });
     expect(rows[0].one).toBe(1);
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("does not build anything when NFC-e is off", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const orgId = await makeOrg("A");
+    const shop = await fiscalShop(orgId, { enabled: false });
+    const saleId = await paidSale(orgId, shop, shop.barcode, 1);
+    const boom = async (): Promise<never> => {
+      throw new Error("build must not run");
+    };
+    await withOrg(orgId, (tx) => enqueueFiscalDocument(tx, saleId, NOW, boom));
+    expect(spy).not.toHaveBeenCalled();
+    expect(await docs(saleId)).toHaveLength(0);
   });
 });
