@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
+import type { SourceAuth } from "@/access/auth";
 import type { Tx } from "@/db/tenant";
 import { AppError, isForeignKeyViolation, isInsufficientPrivilege } from "@/lib/errors";
 import { parse } from "@/lib/validate";
@@ -35,4 +36,44 @@ export async function revokeAccessSource(tx: Tx, sourceId: string): Promise<void
   const rows = await tx`
     update access_sources set revoked_at = coalesce(revoked_at, now()) where id = ${sourceId} returning id`;
   if (rows.length === 0) throw new AppError("not_found");
+}
+
+export const MAX_FUTURE_MS = 5 * 60_000;
+export const MAX_PAST_MS = 7 * 86_400_000;
+
+// zod drops unknown keys: nothing but these four fields is ever stored.
+const EventInput = z.object({
+  occurredAt: z.string().datetime({ offset: true }),
+  eventId: z.string().min(1).max(64).optional(),
+  personId: z.string().min(1).max(64).optional(),
+  kind: z.literal("entry").optional(),
+});
+
+/** Stores one entry. A repeated event id of the same reader is a duplicate and writes nothing. */
+export async function recordAccessEvent(
+  tx: Tx,
+  auth: SourceAuth,
+  raw: unknown,
+  now: Date,
+): Promise<{ id: string | null; duplicate: boolean }> {
+  const e = parse(EventInput, raw);
+  const at = new Date(e.occurredAt);
+  if (at.getTime() > now.getTime() + MAX_FUTURE_MS || at.getTime() < now.getTime() - MAX_PAST_MS) {
+    throw new AppError("invalid_input", "occurredAt out of range");
+  }
+  let personId = e.personId ?? null;
+  if (personId) {
+    const [forgotten] = await tx`
+      select 1 from access_people
+      where source_id = ${auth.sourceId} and external_id = ${personId} and forgotten_at is not null`;
+    if (forgotten) personId = null; // she asked to be forgotten: no identifier is kept
+  }
+  const [row] = await tx`
+    insert into access_events (org_id, market_id, source_id, occurred_at, person_external_id, event_id)
+    values (${auth.orgId}, ${auth.marketId}, ${auth.sourceId}, ${at}, ${personId}, ${e.eventId ?? null})
+    on conflict (source_id, event_id) where event_id is not null do nothing
+    returning id`;
+  if (!row) return { id: null, duplicate: true };
+  await tx`update access_sources set last_event_at = ${now} where id = ${auth.sourceId}`;
+  return { id: row.id as string, duplicate: false };
 }
