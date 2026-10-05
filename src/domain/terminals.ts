@@ -7,7 +7,13 @@ import { parse } from "@/lib/validate";
 export const hashTerminalToken = (token: string): string =>
   createHash("sha256").update(token).digest("hex");
 
-const Input = z.object({ marketId: z.string().uuid(), name: z.string().trim().min(2).max(60) });
+// Printable ASCII without spaces, as Mercado Pago writes it (for example NEWLAND_N950__N950NCB801293324).
+const DeviceId = z.string().trim().min(1).max(64).regex(/^[\x21-\x7e]+$/);
+const Input = z.object({
+  marketId: z.string().uuid(),
+  name: z.string().trim().min(2).max(60),
+  pointDeviceId: DeviceId.optional(),
+});
 
 export type TerminalRow = {
   id: string;
@@ -20,6 +26,7 @@ export type TerminalRow = {
   lastHeartbeatAt: Date | null;
   agentVersion: string | null;
   pdvStatus: string | null;
+  pointDeviceId: string | null;
 };
 
 /** The plain token is returned once and never stored: only its SHA-256 is. */
@@ -32,8 +39,8 @@ export async function createTerminal(
   const token = randomBytes(32).toString("base64url");
   try {
     const [row] = await tx`
-      insert into terminals (org_id, market_id, name, token_hash)
-      values (${orgId}, ${i.marketId}, ${i.name}, ${hashTerminalToken(token)})
+      insert into terminals (org_id, market_id, name, token_hash, point_device_id)
+      values (${orgId}, ${i.marketId}, ${i.name}, ${hashTerminalToken(token)}, ${i.pointDeviceId ?? null})
       returning id`;
     return { id: row.id as string, token };
   } catch (e) {
@@ -45,7 +52,7 @@ export async function createTerminal(
 export async function listTerminals(tx: Tx): Promise<TerminalRow[]> {
   const rows = await tx`
     select t.id, t.market_id, m.name as market_name, m.timezone, t.name, t.created_at, t.revoked_at,
-           t.last_heartbeat_at, t.agent_version, t.pdv_status
+           t.last_heartbeat_at, t.agent_version, t.pdv_status, t.point_device_id
     from terminals t join markets m on m.id = t.market_id
     order by t.created_at desc`;
   return rows.map((r) => ({
@@ -59,6 +66,7 @@ export async function listTerminals(tx: Tx): Promise<TerminalRow[]> {
     lastHeartbeatAt: (r.last_heartbeat_at as Date | null) ?? null,
     agentVersion: (r.agent_version as string | null) ?? null,
     pdvStatus: (r.pdv_status as string | null) ?? null,
+    pointDeviceId: (r.point_device_id as string | null) ?? null,
   }));
 }
 
@@ -66,5 +74,15 @@ export async function revokeTerminal(tx: Tx, terminalId: string): Promise<void> 
   if (!z.string().uuid().safeParse(terminalId).success) throw new AppError("not_found");
   const rows = await tx`
     update terminals set revoked_at = coalesce(revoked_at, now()) where id = ${terminalId} returning id`;
+  if (rows.length === 0) throw new AppError("not_found");
+}
+
+const DeviceInput = z.object({ pointDeviceId: DeviceId.optional() });
+
+/** Pairs the totem with a Mercado Pago Point machine; an empty value clears the pairing. */
+export async function setTerminalDevice(tx: Tx, terminalId: string, raw: unknown): Promise<void> {
+  if (!z.string().uuid().safeParse(terminalId).success) throw new AppError("not_found");
+  const i = parse(DeviceInput, raw);
+  const rows = await tx`update terminals set point_device_id = ${i.pointDeviceId ?? null} where id = ${terminalId} returning id`;
   if (rows.length === 0) throw new AppError("not_found");
 }

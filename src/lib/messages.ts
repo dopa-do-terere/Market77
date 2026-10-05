@@ -23,6 +23,8 @@ const MESSAGES: Record<string, string> = {
   release_not_found: "Versão do agente não encontrada.",
   release_exists: "Esta versão do agente já foi publicada.",
   release_too_large: "O pacote do agente passou do limite de 20 MB.",
+  credentials_key_missing: "O servidor não tem a chave de criptografia das credenciais (CREDENTIALS_KEY).",
+  credentials_test_failed: "O Mercado Pago recusou o token. Confira se é o access token de produção.",
 };
 
 export const message = (code: string): string => MESSAGES[code] ?? "Erro inesperado.";
