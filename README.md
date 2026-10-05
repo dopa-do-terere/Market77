@@ -39,7 +39,7 @@ Stack: Next.js 15, React 19, TypeScript, Postgres 16 (`postgres.js`, migrations 
 3. Escaneie (o leitor funciona como teclado) e toque em **Pagar com Pix**.
 4. Em desenvolvimento o Pix é simulado. Para "pagar" a cobrança mostrada no QR, use o identificador depois de `FAKEPIX|` do código copia e cola:
    `curl -X POST http://localhost:3000/api/dev/fake-pix/<identificador>/pay`
-5. Variáveis: `PIX_PROVIDER=fake`, `FAKE_PIX_SECRET` (assinatura do webhook simulado) e `RECONCILE_SECRET` (rota `POST /api/internal/reconcile`, que um agendador deve chamar a cada minuto em produção (veja abaixo)).
+5. Variáveis: `FAKE_PIX_SECRET` (assinatura do webhook simulado) e `RECONCILE_SECRET` (rota `POST /api/internal/reconcile`, que um agendador deve chamar a cada minuto em produção (veja abaixo)). Para o Mercado Pago, defina também `CREDENTIALS_KEY` (`openssl rand -base64 32`): ela cifra, no banco, as credenciais que cada dono cola em **Pagamentos**.
 
 O adaptador `fake` e a rota de pagamento simulado recusam funcionar com `NODE_ENV=production`.
 
@@ -80,14 +80,14 @@ O pacote do agente fica no Postgres (limite de 20 MB). Variáveis novas: `RELEAS
 
 O totem tem os botões **Pagar com Pix** e **Pagar com cartão**. No cartão a tela pede para seguir as instruções na maquininha (2 minutos), com o botão **Cancelar**. Aprovação paga a venda e baixa o estoque como no Pix; recusa, cancelamento e tempo esgotado devolvem o carrinho com o motivo.
 
-Ainda não há maquininha real escolhida: em desenvolvimento o cartão é simulado (`CARD_PROVIDER=fake`). Para "passar o cartão" de uma cobrança, pegue o identificador do pagamento (`select external_id from payments order by created_at desc limit 1`) e use:
+Ainda não há maquininha real escolhida: em desenvolvimento o cartão é simulado (simulador, quando a organização não conectou o Mercado Pago). Para "passar o cartão" de uma cobrança, pegue o identificador do pagamento (`select external_id from payments order by created_at desc limit 1`) e use:
 
 ```bash
 curl -X POST http://localhost:3000/api/dev/fake-card/<identificador>/approve
 curl -X POST http://localhost:3000/api/dev/fake-card/<identificador>/decline
 ```
 
-Variáveis: `CARD_PROVIDER=fake` e `FAKE_CARD_SECRET` (assinatura do webhook simulado). O webhook do provedor de cartão é `POST /api/webhooks/card/<provedor>`. O adaptador `fake` de cartão e as rotas `/api/dev/fake-card` recusam funcionar com `NODE_ENV=production`.
+Variável: `FAKE_CARD_SECRET` (assinatura do webhook simulado). O webhook do provedor de cartão é `POST /api/webhooks/card/<provedor>`. O adaptador `fake` de cartão e as rotas `/api/dev/fake-card` recusam funcionar com `NODE_ENV=production`.
 
 Um adaptador real implementa a interface `CardProvider` (`src/payments/card.ts`) e passa na suíte de contrato `tests/payments/card-contract.ts`. Se a maquininha escolhida exigir SDK local, será preciso uma ponte pelo agente do totem (fase própria).
 
@@ -160,3 +160,21 @@ O `fake` e essas rotas recusam funcionar com `NODE_ENV=production`. Um leitor re
 ## Produção
 
 Troque a senha do papel `market77_app` (`ALTER ROLE market77_app PASSWORD '...'`) e use essa senha em `DATABASE_APP_URL`.
+
+## Mercado Pago (fase 7)
+
+Cada organização usa a própria conta. O dono abre **Pagamentos** no painel e cola o access token e o segredo do webhook de uma aplicação criada em "Suas integrações" do Mercado Pago. Sem credenciais, a organização usa o simulador (que recusa funcionar em produção).
+
+- Pix: `POST /v1/payments`. Cartão: Orders API da Point (`POST /v1/orders`, `type: "point"`). A maquininha de cada totem é o campo **ID da maquininha Point** em **Totens**.
+- Webhooks, um par de URLs por organização (a tela mostra as URLs prontas): `POST /api/webhooks/pix/mercadopago/<orgId>` (evento de pagamento) e `POST /api/webhooks/card/mercadopago/<orgId>` (evento de order). A assinatura `x-signature` é validada com o segredo da organização, e o estado do pagamento é sempre consultado na API.
+- `CREDENTIALS_KEY` perdida torna as credenciais salvas ilegíveis: o dono precisa colar de novo.
+
+### Roteiro manual (conta de teste e uma Point)
+
+1. Com `CREDENTIALS_KEY` definida e o servidor no ar, entre como dono, abra **Pagamentos**, cole token e segredo e clique em **Testar**: deve mostrar que o Mercado Pago aceitou o token.
+2. Cadastre as duas URLs de webhook no painel do Mercado Pago (Pix: pagamentos; cartão: order) e use o segredo gerado.
+3. Em **Totens**, preencha o ID da Point do totem.
+4. No totem: pagar com Pix, ler o QR no app do banco e pagar: a venda fica paga e o estoque baixa uma vez.
+5. Pagar com cartão: a Point mostra o valor; aprovar, recusar (cartão de teste recusado), cancelar pelo botão do totem e deixar expirar. Confira cada desfecho na tela do totem e em **Vendas**.
+6. Confira nos logs do servidor que nenhum token, segredo ou corpo de resposta do Mercado Pago aparece.
+7. Ponto a confirmar na primeira execução real: o manifesto da assinatura (`id`, `request-id`, `ts`) deve validar nos dois tipos de notificação. Se uma delas voltar 401 com segredo certo, compare o manifesto com a documentação atual e ajuste `verifyNotification`.

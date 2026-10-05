@@ -41,7 +41,7 @@ Os segredos nunca voltam para a tela. A tela mostra "configurado em <data>" e `t
 `src/payments/registry.ts`:
 - `getPixProvider(tx, orgId)` e `getCardProvider(tx, orgId)` leem `provider_credentials` da organização. Com credenciais, devolvem o adaptador Mercado Pago montado com elas. Sem credenciais: `fake` fora de produção; em produção, `provider_unavailable`.
 - O registro de nomes continua com `Object.hasOwn` para rotas antigas `/api/webhooks/{pix|card}/[provider]`, que passam a aceitar só `fake`.
-- Cache por organização em `Map` em memória, invalidado quando o dono salva ou remove credenciais (`// ponytail`: por processo; com várias instâncias, a troca vale em até o TTL de 60 s do cache).
+- Sem cache: a leitura de credenciais é uma consulta indexada por chamada, o que dispensa invalidação e estado em memória.
 - `PIX_PROVIDER` e `CARD_PROVIDER` saem do env, de `vitest.config.ts` e do README.
 
 Pontos de chamada que passam a receber `orgId`: `payments/reconcile.ts`, `payments/webhook.ts`, `domain/refresh.ts`, `pdv/http.ts` (2), `domain/payments.ts` (2).
@@ -57,6 +57,8 @@ Toda chamada usa `withTimeout`. O corpo de erro do Mercado Pago nunca vai para o
 - Corpo: `transaction_amount` em reais (centavos dividido por 100, duas casas), `payment_method_id: "pix"`, `date_of_expiration` igual a `expiresAt`, `external_reference` igual a `saleId`, `payer.email` genérico da organização (o totem não coleta dados do cliente).
 - Resposta: `id` vira `externalId`; `point_of_interaction.transaction_data.qr_code` vira `qrPayload`.
 - `getCharge`: `GET /v1/payments/{id}`. `approved` vira `confirmed`; `pending` e `in_process` viram `pending`; `cancelled` e `rejected` viram `failed`; `expired` vira `expired`. O valor volta em centavos.
+
+O Mercado Pago exige expiração mínima de 30 minutos; o adaptador pede 31 minutos, e o pagamento Market77 continua expirando em 3 minutos. Um pagamento tardio só vale se o total da venda não mudou (confirmPayment).
 
 **Cartão** (`createCardCharge`, `cancelCardCharge`, `getCharge`, `parseWebhook`):
 - `POST /v1/orders` com `type: "point"`, `external_reference` igual a `saleId`, `expiration_time` em ISO-8601 (`PT2M`), `transactions.payments[0].amount` como string em reais, `config.point.terminal_id` igual a `terminals.point_device_id`, `config.point.print_on_terminal: "no_ticket"`. Sem `default_type`: débito ou crédito é escolhido na máquina.
@@ -94,7 +96,7 @@ Fluxo:
 
 ## 9. Testes
 
-- **Contrato:** a suíte de contrato de `PaymentProvider` e de `CardProvider` roda também contra os adaptadores Mercado Pago, com `fetch` injetado devolvendo fixtures gravadas (criar, consultar, cancelar idempotente, mapeamento de todos os estados, assinatura válida, inválida e `ts` velho).
+- **Adaptadores:** testes próprios dos adaptadores Mercado Pago com `fetch` injetado e respostas gravadas (criar, consultar, cancelar idempotente, mapeamento de todos os estados, erro sem vazar corpo). A suíte de contrato compartilhada não se aplica porque ela supõe um webhook que já traz o estado; o do Mercado Pago só avisa e o estado vem da API (`parseWebhook` dos adaptadores lança erro e o caminho real é `handleMercadoPagoWebhook`).
 - **Segredos:** ida e volta, texto adulterado falha, chave ausente ou de tamanho errado falha com erro claro.
 - **Registro:** com credenciais usa Mercado Pago, sem credenciais usa `fake` fora de produção e falha em produção, isolamento entre organizações (a organização A nunca lê o segredo da B), invalidação do cache ao salvar.
 - **Webhook:** organização inexistente, assinatura inválida, evento duplicado, evento para pagamento de outra organização, estado vindo da API e não do corpo.
