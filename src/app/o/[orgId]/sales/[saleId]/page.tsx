@@ -4,11 +4,19 @@ import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { getSaleDetail } from "@/domain/sale-queries";
 import { FAILURE_LABEL, FISCAL_LABEL, METHOD_LABEL, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { message } from "@/lib/messages";
 import { formatBRL } from "@/lib/money";
 import { reissueFiscalAction } from "./actions";
 
-export default async function SaleDetailPage({ params }: { params: Promise<{ orgId: string; saleId: string }> }) {
+export default async function SaleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgId: string; saleId: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { orgId, saleId } = await params;
+  const { error } = await searchParams;
   const { role } = await requireOrgPage(orgId, "sale:read");
   const sale = await withOrg(orgId, (tx) => getSaleDetail(tx, saleId));
   if (!sale) notFound();
@@ -16,6 +24,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ org
   return (
     <main>
       <h1>Venda</h1>
+      {error && <p role="alert">{message(error)}</p>}
       <p>
         {sale.marketName}, {when(sale.createdAt)}: {STATUS_LABEL[sale.status] ?? sale.status},{" "}
         {formatBRL(sale.totalCents)}
@@ -55,7 +64,11 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ org
             {sale.fiscal.danfeUrl && (
               <>
                 {" "}
-                (<a href={sale.fiscal.danfeUrl}>DANFE</a>)
+                ({sale.fiscal.danfeUrl.startsWith("https://") ? (
+                  <a href={sale.fiscal.danfeUrl}>DANFE</a>
+                ) : (
+                  "DANFE indisponível"
+                )})
               </>
             )}
           </p>
