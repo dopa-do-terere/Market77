@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
+import { saveMercadoPagoCredentials } from "@/domain/credentials";
 import { createTerminal } from "@/domain/terminals";
 import { buildFakeCardWebhook } from "@/payments/fake-card";
 import { handleCardWebhook } from "@/payments/webhook";
@@ -73,9 +74,12 @@ describe("pay with a method", () => {
     expect((await s.get()).status).toBe("open");
   });
 
-  it("answers 503 for an unknown card provider in the environment", async () => {
+  it("answers 503 when no card provider can be resolved", async () => {
     const s = await setup();
-    vi.stubEnv("CARD_PROVIDER", "nope");
+    await withOrg(s.orgId, (tx) =>
+      saveMercadoPagoCredentials(tx, s.orgId, { accessToken: "APP_USR-token-1234", webhookSecret: "whsec-123456" }),
+    );
+    vi.stubEnv("CREDENTIALS_KEY", ""); // credentials that cannot be decrypted: no provider can be resolved
     const res = await payCard(s);
     expect([res.status, (await json(res)).error]).toEqual([503, "provider_unavailable"]);
   });

@@ -1,7 +1,7 @@
 import type { Tx } from "@/db/tenant";
 import type { CardProvider } from "@/payments/card";
 import { type PaymentProvider, type ChargeStatus, withTimeout } from "@/payments/provider";
-import { getCardProvider } from "@/payments/registry";
+import { resolveCard } from "@/payments/registry";
 import { confirmPayment, failPayment } from "./payments";
 import { type SaleView, type TerminalCtx, getSaleView, lockSale, reopenSale } from "./sales";
 
@@ -40,7 +40,7 @@ export async function refreshSale(
         let charge: Charge | null = null;
         try {
           if (isCard) {
-            source = card ?? getCardProvider();
+            source = card ?? (await resolveCard(tx));
             charge = await withTimeout(source.getCharge(p.external_id as string));
           } else {
             charge = await withTimeout(provider.getCharge(p.external_id as string));

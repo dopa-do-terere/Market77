@@ -6,11 +6,9 @@ const db = process.env.TEST_DB ?? "market77_test";
 const env = {
   DATABASE_URL: `postgres://market77:market77@localhost:5432/${db}`,
   DATABASE_APP_URL: `postgres://market77_app:market77_app@localhost:5432/${db}`,
-  PIX_PROVIDER: "fake",
   FAKE_PIX_SECRET: "test-fake-secret",
   RECONCILE_SECRET: "test-reconcile-secret",
   RELEASE_SECRET: "test-release-secret",
-  CARD_PROVIDER: "fake",
   FAKE_CARD_SECRET: "test-fake-card-secret",
   FISCAL_PROVIDER: "fake",
   ACCESS_PROVIDER: "fake",

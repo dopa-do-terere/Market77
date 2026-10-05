@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
+import { saveMercadoPagoCredentials } from "@/domain/credentials";
 import { CARD_TTL_MS, cancelPayment, confirmPayment, failPayment, startPayment } from "@/domain/payments";
 import { refreshSale } from "@/domain/refresh";
 import { listRecentSales } from "@/domain/sale-queries";
@@ -130,9 +131,12 @@ describe("startPayment with card", () => {
     expect(await saleStatus(r)).toBe("open");
   });
 
-  it("answers provider_unavailable for an unknown card provider in the environment", async () => {
+  it("answers provider_unavailable when no card provider can be resolved", async () => {
     const r = await ready();
-    vi.stubEnv("CARD_PROVIDER", "nope");
+    await withOrg(r.orgId, (tx) =>
+      saveMercadoPagoCredentials(tx, r.orgId, { accessToken: "APP_USR-token-1234", webhookSecret: "whsec-123456" }),
+    );
+    vi.stubEnv("CREDENTIALS_KEY", ""); // credentials that cannot be decrypted: no provider can be resolved
     const code = await codeOf(
       withOrg(r.orgId, (tx) => startPayment(tx, r.orgId, r.store, r.saleId, fakeProvider, NOW, { method: "card" })),
     );

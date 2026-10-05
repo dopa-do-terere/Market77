@@ -6,7 +6,7 @@ import { addItemByBarcode, cancelSale, setCustomerCpf, setItemQuantity } from "@
 import { AppError } from "@/lib/errors";
 import { parse } from "@/lib/validate";
 import { message } from "@/lib/messages";
-import { getProvider } from "@/payments/registry";
+import { resolvePix } from "@/payments/registry";
 import { type TerminalAuth, requireTerminal } from "./auth";
 
 const STATUS: Record<string, number> = {
@@ -95,14 +95,18 @@ async function optionalBody(req: Request): Promise<unknown> {
 export const payHandler = (req: Request, saleId: string, now: Date = new Date()) =>
   handle(req, async (t) => {
     const { method } = parse(PayInput, await optionalBody(req));
-    return withOrg(t.orgId, (tx) => startPayment(tx, t.orgId, ctx(t), saleId, getProvider(), now, { method }));
+    return withOrg(t.orgId, async (tx) =>
+      startPayment(tx, t.orgId, ctx(t), saleId, await resolvePix(tx), now, { method }),
+    );
   });
 
 export const cancelPaymentHandler = (req: Request, saleId: string, now: Date = new Date()) =>
   handle(req, (t) => withOrg(t.orgId, (tx) => cancelPayment(tx, ctx(t), saleId, now)));
 
 export const getSaleHandler = (req: Request, saleId: string, now: Date = new Date()) =>
-  handle(req, (t) => withOrg(t.orgId, (tx) => refreshSale(tx, ctx(t), saleId, getProvider(), now)));
+  handle(req, (t) =>
+    withOrg(t.orgId, async (tx) => refreshSale(tx, ctx(t), saleId, await resolvePix(tx), now)),
+  );
 
 export const cancelHandler = (req: Request, saleId: string, now: Date = new Date()) =>
   handle(req, (t) => withOrg(t.orgId, (tx) => cancelSale(tx, ctx(t), saleId, now)));

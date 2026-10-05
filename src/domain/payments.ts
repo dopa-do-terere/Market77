@@ -4,7 +4,7 @@ import type { Tx } from "@/db/tenant";
 import { AppError } from "@/lib/errors";
 import type { CardProvider } from "@/payments/card";
 import { type PaymentProvider, withTimeout } from "@/payments/provider";
-import { getCardProvider } from "@/payments/registry";
+import { resolveCard } from "@/payments/registry";
 import { type SaleView, type TerminalCtx, getSaleView, lockSale, reopenSale } from "./sales";
 import { enqueueFiscalDocument } from "./fiscal";
 import { debitSale } from "./stock";
@@ -17,10 +17,10 @@ export type FailReason = "declined" | "cancelled" | "expired";
 
 const isUuid = (s: string) => z.string().uuid().safeParse(s).success;
 
-function cardProviderOrThrow(card?: CardProvider): CardProvider {
+async function cardProviderOrThrow(tx: Tx, card?: CardProvider): Promise<CardProvider> {
   if (card) return card;
   try {
-    return getCardProvider();
+    return await resolveCard(tx);
   } catch {
     throw new AppError("provider_unavailable");
   }
@@ -41,7 +41,7 @@ async function endPending(
   const stillValid = (p.expires_at as Date) > now;
   const externalId = p.external_id as string;
   if (p.method === "card") {
-    const provider = cardProviderOrThrow(card);
+    const provider = await cardProviderOrThrow(tx, card);
     // Always ask the machine, even after the charge ran out: an approval whose webhook is late must win.
     let approvedCents: number | null = null;
     try {
@@ -105,7 +105,7 @@ export async function startPayment(
   const expiresAt = new Date(now.getTime() + (method === "card" ? CARD_TTL_MS : QR_TTL_MS));
 
   if (method === "card") {
-    const card = cardProviderOrThrow(opts.card);
+    const card = await cardProviderOrThrow(tx, opts.card);
     let charge: Awaited<ReturnType<CardProvider["createCardCharge"]>>;
     try {
       charge = await withTimeout(
@@ -178,7 +178,7 @@ export async function confirmPayment(
     if (e.method !== "card") continue;
     // ponytail: best-effort stop of the machine, no retry; a charge it still approves is rejected above.
     try {
-      await withTimeout(getCardProvider().cancelCardCharge(e.external_id as string));
+      await withTimeout((await resolveCard(tx)).cancelCardCharge(e.external_id as string));
     } catch {
       // provider down or unknown: the payment is already ended here
     }

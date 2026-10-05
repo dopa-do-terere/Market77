@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminSql } from "@/db/client";
 import { withOrg } from "@/db/tenant";
+import { saveMercadoPagoCredentials } from "@/domain/credentials";
 import { CARD_TTL_MS, startPayment } from "@/domain/payments";
 import { CARD_CHECK_INTERVAL_MS, refreshSale } from "@/domain/refresh";
 import { addItemByBarcode } from "@/domain/sales";
@@ -129,7 +130,10 @@ describe("refreshSale with a card payment", () => {
 
   it("keeps the payment pending at expiry when no card provider can be resolved", async () => {
     const r = await awaiting("card");
-    vi.stubEnv("CARD_PROVIDER", "nope");
+    await withOrg(r.orgId, (tx) =>
+      saveMercadoPagoCredentials(tx, r.orgId, { accessToken: "APP_USR-token-1234", webhookSecret: "whsec-123456" }),
+    );
+    vi.stubEnv("CREDENTIALS_KEY", ""); // credentials that cannot be decrypted: no provider can be resolved
     const view = await withOrg(r.orgId, (tx) =>
       refreshSale(tx, r.store, r.saleId, fakeProvider, at(CARD_TTL_MS + 3000)),
     );
@@ -143,9 +147,12 @@ describe("refreshSale with a card payment", () => {
     expect((await r.refresh(at(CARD_CHECK_INTERVAL_MS), broken)).status).toBe("awaiting_payment");
   });
 
-  it("keeps waiting, without failing, when the configured card provider is unknown", async () => {
+  it("keeps waiting, without failing, when the card provider cannot be resolved", async () => {
     const r = await awaiting("card");
-    vi.stubEnv("CARD_PROVIDER", "nope");
+    await withOrg(r.orgId, (tx) =>
+      saveMercadoPagoCredentials(tx, r.orgId, { accessToken: "APP_USR-token-1234", webhookSecret: "whsec-123456" }),
+    );
+    vi.stubEnv("CREDENTIALS_KEY", ""); // credentials that cannot be decrypted: no provider can be resolved
     const view = await withOrg(r.orgId, (tx) =>
       refreshSale(tx, r.store, r.saleId, fakeProvider, at(CARD_CHECK_INTERVAL_MS)),
     );
