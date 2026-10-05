@@ -71,7 +71,7 @@ A rota `POST /api/internal/reconcile` passa a devolver `{ visited, fiscal, acces
 
 - `listAccessSources(tx, marketId)`: nome, criação, revogação, `lastSyncAt`, `lastSyncError`, `lastEventAt`, quantidade de pessoas ativas.
 - `listAccessPeople(tx, marketId)`: leitor, identificador, nome, ativa, esquecida.
-- `listRecentAccess(tx, marketId, limit = 100)`: hora, leitor, identificador, nome (resolvido por `(source_id, external_id)`), situação (`known`, `unregistered`, `anonymous`, `forgotten`).
+- `listRecentAccess(tx, marketId, limit = 100)`: hora, leitor, identificador, nome (resolvido por `(source_id, external_id)`), situação (`known`, `unregistered`, `anonymous`).
 - `dailyAccessSummary(tx, marketId, now, days = 14)`: uma linha por dia (inclusive os sem eventos), no fuso do mercado, com `entries`, `people` (distintas por `(source_id, person_external_id)`; ponytail: a mesma pessoa em dois leitores conta duas vezes), `paidSales` (vendas pagas do mercado, por `paid_at`) e `salesPerEntry` (`paidSales / entries`, nulo sem entradas).
 - `hourlyAccess(tx, marketId, day)`: 24 linhas (`hour`, `entries`) do dia escolhido (`AAAA-MM-DD`, validado) no fuso do mercado.
 
@@ -80,7 +80,7 @@ A rota `POST /api/internal/reconcile` passa a devolver `{ visited, fiscal, acces
 Nova tela `markets/[marketId]/access`, com link na página do mercado, visível só com `access:read`:
 - **Leitores:** formulário para cadastrar (`access:write`), o token exibido uma única vez (como o do totem), revogar, e a última sincronização, o último evento e o erro de sincronização.
 - **Pessoas:** lista com a ação **Esquecer pessoa** (`access:write`).
-- **Acessos recentes:** os últimos 100, com a hora no fuso do mercado e "Pessoa não cadastrada (id ...)", "Não identificada" ou "Pessoa removida a pedido" quando for o caso.
+- **Acessos recentes:** os últimos 100, com a hora no fuso do mercado e "Pessoa não cadastrada (id ...)", ou "Não identificada" (inclusive os acessos de quem foi esquecida, que perdem o identificador). Na lista de pessoas, quem foi esquecida aparece como "Removida a pedido".
 - **Resumo:** tabela por dia (entradas, pessoas, vendas, vendas por entrada com duas casas) e a tabela por hora do dia escolhido (`?day=`).
 - **Permissões:** `access:read` e `access:write` só para o dono (`src/auth/permissions.ts`).
 
