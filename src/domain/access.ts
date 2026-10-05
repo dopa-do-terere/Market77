@@ -6,6 +6,7 @@ import { getAccessProvider } from "@/access/registry";
 import { adminSql } from "@/db/client";
 import { type Tx, withOrg } from "@/db/tenant";
 import { AppError, isForeignKeyViolation, isInsufficientPrivilege } from "@/lib/errors";
+import { isRealDay } from "./lots";
 import { parse } from "@/lib/validate";
 import { withTimeout } from "@/payments/provider";
 
@@ -207,4 +208,154 @@ export async function forgetAccessPerson(tx: Tx, personId: string, now: Date): P
   await tx`
     update access_events set person_external_id = null
     where source_id = ${p.source_id as string} and person_external_id = ${p.external_id as string}`;
+}
+
+export type AccessSourceRow = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+  lastSyncAt: Date | null;
+  lastSyncError: string | null;
+  lastEventAt: Date | null;
+  activePeople: number;
+};
+
+export async function listAccessSources(tx: Tx, marketId: string): Promise<AccessSourceRow[]> {
+  const rows = await tx`
+    select s.id, s.name, s.created_at, s.revoked_at, s.last_sync_at, s.last_sync_error, s.last_event_at,
+      (select count(*)::int from access_people p where p.source_id = s.id and p.active) as active_people
+    from access_sources s where s.market_id = ${marketId} order by s.created_at desc, s.id`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    createdAt: r.created_at as Date,
+    revokedAt: (r.revoked_at as Date | null) ?? null,
+    lastSyncAt: (r.last_sync_at as Date | null) ?? null,
+    lastSyncError: (r.last_sync_error as string | null) ?? null,
+    lastEventAt: (r.last_event_at as Date | null) ?? null,
+    activePeople: r.active_people as number,
+  }));
+}
+
+export type AccessPersonRow = {
+  id: string;
+  sourceName: string;
+  externalId: string;
+  name: string | null;
+  active: boolean;
+  forgotten: boolean;
+};
+
+export async function listAccessPeople(tx: Tx, marketId: string): Promise<AccessPersonRow[]> {
+  const rows = await tx`
+    select p.id, s.name as source_name, p.external_id, p.name, p.active, (p.forgotten_at is not null) as forgotten
+    from access_people p join access_sources s on s.id = p.source_id
+    where s.market_id = ${marketId}
+    order by (p.forgotten_at is not null), lower(p.name), p.external_id`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    sourceName: r.source_name as string,
+    externalId: r.external_id as string,
+    name: (r.name as string | null) ?? null,
+    active: r.active as boolean,
+    forgotten: r.forgotten as boolean,
+  }));
+}
+
+export type AccessEventRow = {
+  id: string;
+  occurredAt: Date;
+  sourceName: string;
+  personExternalId: string | null;
+  personName: string | null;
+  status: "known" | "unregistered" | "anonymous";
+};
+
+export async function listRecentAccess(tx: Tx, marketId: string, limit = 100): Promise<AccessEventRow[]> {
+  const rows = await tx`
+    select e.id, e.occurred_at, s.name as source_name, e.person_external_id, p.name as person_name
+    from access_events e
+    join access_sources s on s.id = e.source_id
+    left join access_people p on p.source_id = e.source_id and p.external_id = e.person_external_id
+    where e.market_id = ${marketId}
+    order by e.occurred_at desc, e.id limit ${limit}`;
+  return rows.map((r) => {
+    const personExternalId = (r.person_external_id as string | null) ?? null;
+    const personName = (r.person_name as string | null) ?? null;
+    return {
+      id: r.id as string,
+      occurredAt: r.occurred_at as Date,
+      sourceName: r.source_name as string,
+      personExternalId,
+      personName,
+      status: personExternalId === null ? "anonymous" : personName !== null ? "known" : "unregistered",
+    };
+  });
+}
+
+export type DailyAccessRow = {
+  day: string;
+  entries: number;
+  people: number;
+  paidSales: number;
+  salesPerEntry: number | null;
+};
+
+/**
+ * One row per local day (market time zone), newest first, including quiet days.
+ * ponytail: "people" counts distinct (reader, person id); the same person on two readers counts twice.
+ */
+export async function dailyAccessSummary(tx: Tx, marketId: string, now: Date, days = 14): Promise<DailyAccessRow[]> {
+  const rows = await tx`
+    with m as (select timezone as tz from markets where id = ${marketId}),
+    d as (
+      select gs::date as day
+      from m, generate_series(
+        ((${now}::timestamptz at time zone m.tz)::date - ${days - 1}::int),
+        (${now}::timestamptz at time zone m.tz)::date,
+        interval '1 day') gs
+    ),
+    e as (
+      select (ev.occurred_at at time zone m.tz)::date as day, count(*)::int as entries,
+        count(distinct (ev.source_id, ev.person_external_id)) filter (where ev.person_external_id is not null)::int as people
+      from access_events ev, m where ev.market_id = ${marketId} group by 1
+    ),
+    s as (
+      select (sa.paid_at at time zone m.tz)::date as day, count(*)::int as paid
+      from sales sa, m where sa.market_id = ${marketId} and sa.status = 'paid' group by 1
+    )
+    select to_char(d.day, 'YYYY-MM-DD') as day, coalesce(e.entries, 0) as entries,
+      coalesce(e.people, 0) as people, coalesce(s.paid, 0) as paid_sales
+    from d left join e on e.day = d.day left join s on s.day = d.day
+    order by d.day desc`;
+  return rows.map((r) => {
+    const entries = r.entries as number;
+    const paidSales = r.paid_sales as number;
+    return {
+      day: r.day as string,
+      entries,
+      people: r.people as number,
+      paidSales,
+      salesPerEntry: entries > 0 ? paidSales / entries : null,
+    };
+  });
+}
+
+export type HourlyAccessRow = { hour: number; entries: number };
+
+/** The 24 local hours of one day (YYYY-MM-DD) in the market time zone. */
+export async function hourlyAccess(tx: Tx, marketId: string, day: string): Promise<HourlyAccessRow[]> {
+  if (!isRealDay(day)) throw new AppError("invalid_input", "day must be a real date (YYYY-MM-DD)");
+  const rows = await tx`
+    with m as (select timezone as tz from markets where id = ${marketId}),
+    h as (select generate_series(0, 23) as hour),
+    e as (
+      select extract(hour from ev.occurred_at at time zone m.tz)::int as hour, count(*)::int as entries
+      from access_events ev, m
+      where ev.market_id = ${marketId} and (ev.occurred_at at time zone m.tz)::date = ${day}::date
+      group by 1
+    )
+    select h.hour, coalesce(e.entries, 0) as entries from h left join e on e.hour = h.hour order by h.hour`;
+  return rows.map((r) => ({ hour: r.hour as number, entries: r.entries as number }));
 }
