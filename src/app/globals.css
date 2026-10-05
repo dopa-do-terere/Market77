@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --bg: #fffdfa;
+  --surface: #ffffff;
+  --subtle: #faf5ef;
+  --border: #e7ddd2;
+  --fg: #1c1917;
+  --muted: #6b625b;
+  --link: #c24e00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0a09;
+    --surface: #171412;
+    --subtle: #1f1a17;
+    --border: #2f2822;
+    --fg: #faf7f4;
+    --muted: #a8a09a;
+    --link: #ffa31a;
+  }
+}
+
+/* "inline": os utilitários leem a variável na hora de usar, então o escuro troca sem recompilar. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-link: var(--link);
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #ffa31a;
+  --color-brand-500: #ff8a00;
+  --color-brand-600: #f26a00;
+  --color-brand-700: #c24e00;
+  --color-brand-800: #9a3f06;
+  --color-brand-900: #7c350b;
+  --color-brand-950: #431a03;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --shadow-sm: 0 1px 2px 0 rgb(28 25 23 / 0.06);
+}
+
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--fg);
+  }
+}
