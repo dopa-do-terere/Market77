@@ -1,5 +1,6 @@
 "use client";
 import { useActionState } from "react";
+import { Alert, Button, Field, Input } from "@/ui";
 import { type CreateSourceState, createAccessSourceAction } from "./actions";
 
 export function AccessSourceForm({ orgId, marketId }: { orgId: string; marketId: string }) {
@@ -8,24 +9,24 @@ export function AccessSourceForm({ orgId, marketId }: { orgId: string; marketId:
     {},
   );
   return (
-    <section>
-      <form action={formAction}>
-        <label>
-          Nome do leitor <input name="name" required minLength={2} maxLength={60} />
-        </label>{" "}
-        <button type="submit" disabled={pending}>
+    <div className="space-y-4">
+      <form action={formAction} className="flex flex-wrap items-end gap-3">
+        <Field label="Nome do leitor">
+          <Input name="name" required minLength={2} maxLength={60} />
+        </Field>
+        <Button type="submit" disabled={pending}>
           Cadastrar leitor
-        </button>
+        </Button>
       </form>
-      {state.error && <p role="alert">{state.error}</p>}
+      {state.error && <Alert tone="danger">{state.error}</Alert>}
       {state.token && (
-        <div role="status">
+        <Alert tone="success">
           <p>
             Leitor <strong>{state.name}</strong> cadastrado. Copie o token agora: ele não será mostrado de novo.
           </p>
-          <code style={{ wordBreak: "break-all" }}>{state.token}</code>
-        </div>
+          <code className="mt-2 block break-all rounded-md bg-surface px-3 py-2 text-sm text-fg">{state.token}</code>
+        </Alert>
       )}
-    </section>
+    </div>
   );
 }
