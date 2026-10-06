@@ -75,7 +75,7 @@ export default async function MarketPage({
               <td>
                 {can(role, "stock:move") && (
                   <form action={moveStockAction.bind(null, orgId, marketId, r.id)} className="flex flex-wrap items-end gap-2">
-                    <Select name="type" defaultValue="in">
+                    <Select name="type" defaultValue="in" aria-label="Tipo de movimento">
                       <option value="in">Entrada</option>
                       <option value="sale">Venda</option>
                       <option value="loss">Perda</option>

@@ -71,7 +71,7 @@ export default async function TerminalsPage({
                   {!t.revokedAt && (
                     <form action={setTerminalDeviceAction.bind(null, orgId, t.id)} className="flex gap-2">
                       <Input
-                        name="pointDeviceId"
+                        name="pointDeviceId" aria-label="ID da maquininha Point"
                         defaultValue={t.pointDeviceId ?? ""}
                         placeholder="sem maquininha"
                         maxLength={64}

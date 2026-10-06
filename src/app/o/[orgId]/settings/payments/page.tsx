@@ -75,4 +75,5 @@ export default async function PaymentsSettingsPage({
         <code className="block break-all rounded-md bg-subtle px-3 py-2 text-sm">{`${base}/api/webhooks/mercadopago/${orgId}`}</code>
       </Card>
     </main>
-  );}
+  );
+}

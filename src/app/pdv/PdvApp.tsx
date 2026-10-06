@@ -342,7 +342,7 @@ export default function PdvApp() {
               key={d}
               size="touch"
               variant="secondary"
-              className="w-28 px-0 font-semibold"
+              className="w-28 font-semibold"
               onClick={() => setCpfDraft((v) => (v + d).slice(0, 11))}
             >
               {d}
@@ -351,7 +351,7 @@ export default function PdvApp() {
           <Button
             size="touch"
             variant="secondary"
-            className="w-28 px-0"
+            className="w-28"
             onClick={() => setCpfDraft((v) => v.slice(0, -1))}
             aria-label="Apagar"
           >
@@ -360,12 +360,12 @@ export default function PdvApp() {
           <Button
             size="touch"
             variant="secondary"
-            className="w-28 px-0 font-semibold"
+            className="w-28 font-semibold"
             onClick={() => setCpfDraft((v) => (v + "0").slice(0, 11))}
           >
             0
           </Button>
-          <Button size="touch" variant="secondary" className="w-28 px-0" onClick={() => setCpfDraft("")}>
+          <Button size="touch" variant="secondary" className="w-28" onClick={() => setCpfDraft("")}>
             Limpar
           </Button>
         </div>
@@ -395,13 +395,13 @@ export default function PdvApp() {
       <ul className="m-0 w-full max-w-2xl list-none space-y-3 p-0">
         {sale.items.map((i) => (
           <li key={i.id} className="flex items-center justify-center gap-4">
-            <Button size="touch" variant="secondary" className="w-16 px-0" onClick={() => changeQuantity(i, -1)} aria-label="Menos">
+            <Button size="touch" variant="secondary" className="w-16" onClick={() => changeQuantity(i, -1)} aria-label="Menos">
               -
             </Button>
             <span className="flex-1">
               {i.quantity} x {i.productName} ({formatBRL(i.unitPriceCents)})
             </span>
-            <Button size="touch" variant="secondary" className="w-16 px-0" onClick={() => changeQuantity(i, 1)} aria-label="Mais">
+            <Button size="touch" variant="secondary" className="w-16" onClick={() => changeQuantity(i, 1)} aria-label="Mais">
               +
             </Button>
           </li>

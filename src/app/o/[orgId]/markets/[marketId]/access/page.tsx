@@ -163,7 +163,7 @@ export default async function AccessPage({
                   {s.activePeople} pessoa(s) ativa(s), última sincronização {s.lastSyncAt ? when(s.lastSyncAt) : "nunca"},
                   último evento {s.lastEventAt ? when(s.lastEventAt) : "nunca"}
                 </span>
-                {s.lastSyncError && <Badge tone="danger">erro na sincronização: {s.lastSyncError}</Badge>}
+                {s.lastSyncError && (<span role="alert"><Badge tone="danger">erro na sincronização: {s.lastSyncError}</Badge></span>)}
                 {canWrite && !s.revokedAt && (
                   <form action={revokeAccessSourceAction.bind(null, orgId, marketId, s.id)}>
                     <Button type="submit" variant="secondary">Revogar</Button>

@@ -5,6 +5,7 @@ import {
   Alert,
   Badge,
   Button,
+  AuthShell,
   Card,
   Checkbox,
   COMMAND_TONE,
@@ -129,5 +130,13 @@ describe("tones", () => {
     [COMMAND_TONE, COMMAND_STATUS_LABEL],
   ])("has a tone for every label key", (tones, labels) => {
     for (const key of Object.keys(labels)) expect(tones[key], key).toBeDefined();
+  });
+});
+
+describe("AuthShell", () => {
+  it("renders the title as h1", () => {
+    const out = html(<AuthShell title="Entrar">x</AuthShell>);
+    expect(out).toContain("<h1");
+    expect(out).toContain("Entrar");
   });
 });

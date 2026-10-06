@@ -42,4 +42,5 @@ export default async function SalesPage({ params }: { params: Promise<{ orgId: s
         </Table>
       )}
     </main>
-  );}
+  );
+}

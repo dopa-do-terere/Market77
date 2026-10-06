@@ -101,4 +101,5 @@ export default async function SaleDetailPage({
         </a>
       </p>
     </main>
-  );}
+  );
+}
