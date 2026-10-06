@@ -1,11 +1,12 @@
 "use client";
 import QRCode from "qrcode";
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { formatBRL } from "@/lib/money";
 import { formatCpfDraft } from "@/pdv/cpf";
 import { paymentNotice } from "@/pdv/notice";
 import { createScanner } from "@/pdv/scanner";
 import { tokenFromHash } from "@/pdv/token";
+import { Alert, Button, Input, Logo } from "@/ui";
 
 const TOKEN_KEY = "m77_terminal_token";
 
@@ -49,25 +50,10 @@ async function call(token: string, method: string, path: string, body?: unknown)
   return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
 }
 
-const page = {
-  minHeight: "100vh",
-  display: "flex",
-  flexDirection: "column" as const,
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 16,
-  padding: 24,
-  fontSize: 28,
-  fontFamily: "sans-serif",
-  textAlign: "center" as const,
-};
-const keyButton: CSSProperties = { fontSize: 32, height: 72 };
-const bigButton = { fontSize: 28, padding: "16px 32px", minWidth: 220 };
-
 function Screen({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <main style={page}>
-      <h1 style={{ fontSize: 40, margin: 0 }}>{title}</h1>
+    <main className="flex min-h-screen select-none flex-col items-center justify-center gap-5 p-6 text-center text-3xl">
+      <h1 className="text-5xl font-semibold tracking-tight">{title}</h1>
       {children}
     </main>
   );
@@ -287,16 +273,17 @@ export default function PdvApp() {
     return (
       <Screen title="Configurar totem">
         <p>Cole o token do totem (gerado no painel, em Totens).</p>
-        <input
+        <Input
+          touch
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          style={{ fontSize: 24, padding: 12, width: "80%" }}
+          className="w-full max-w-xl"
           aria-label="Token do totem"
         />
-        <button style={bigButton} onClick={connect} disabled={!draft.trim()}>
+        <Button size="touch" onClick={connect} disabled={!draft.trim()}>
           Conectar
-        </button>
-        {notice && <p role="alert">{notice}</p>}
+        </Button>
+        {notice && <Alert tone="danger" className="text-xl">{notice}</Alert>}
       </Screen>
     );
   }
@@ -306,8 +293,9 @@ export default function PdvApp() {
   if (!sale) {
     return (
       <Screen title="Bem-vindo">
-        <p>Escaneie um produto para começar.</p>
-        {notice && <p role="alert">{notice}</p>}
+        <Logo className="h-16 w-auto" />
+        <p className="text-muted">Escaneie um produto para começar.</p>
+        {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
       </Screen>
     );
   }
@@ -323,13 +311,13 @@ export default function PdvApp() {
     return (
       <Screen title={`Pague ${formatBRL(sale.totalCents)} no cartão`}>
         <p>Siga as instruções na maquininha.</p>
-        <p>
+        <p className="text-muted">
           Tempo restante: {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
         </p>
-        {notice && <p role="alert">{notice}</p>}
-        <button style={bigButton} onClick={cancelCardPayment} disabled={cancelling}>
+        {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
+        <Button size="touch" variant="secondary" onClick={cancelCardPayment} disabled={cancelling}>
           Cancelar
-        </button>
+        </Button>
       </Screen>
     );
   }
@@ -337,8 +325,8 @@ export default function PdvApp() {
     const left = Math.max(0, Math.round((new Date(sale.payment?.expiresAt ?? 0).getTime() - now) / 1000));
     return (
       <Screen title={`Pague ${formatBRL(sale.totalCents)} com Pix`}>
-        {qr && <img src={qr} alt="QR code do Pix" width={320} height={320} />}
-        <p style={{ fontSize: 18, wordBreak: "break-all", maxWidth: 560 }}>{sale.payment?.qrPayload}</p>
+        {qr && <img src={qr} alt="QR code do Pix" width={320} height={320} className="rounded-xl bg-white p-2" />}
+        <p className="max-w-xl break-all text-lg text-muted">{sale.payment?.qrPayload}</p>
         <p>Expira em {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</p>
       </Screen>
     );
@@ -346,77 +334,95 @@ export default function PdvApp() {
   if (keypad) {
     return (
       <Screen title="CPF na nota">
-        <p style={{ fontSize: 36, letterSpacing: 2, minHeight: 48 }}>{formatCpfDraft(cpfDraft) || "Digite o CPF"}</p>
-        {notice && <p role="alert">{notice}</p>}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 96px)", gap: 12, justifyContent: "center" }}>
+        <p className="min-h-12 text-4xl tracking-widest">{formatCpfDraft(cpfDraft) || "Digite o CPF"}</p>
+        {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
+        <div className="grid grid-cols-3 gap-3">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-            <button key={d} style={keyButton} onClick={() => setCpfDraft((v) => (v + d).slice(0, 11))}>
+            <Button
+              key={d}
+              size="touch"
+              variant="secondary"
+              className="w-28 px-0 font-semibold"
+              onClick={() => setCpfDraft((v) => (v + d).slice(0, 11))}
+            >
               {d}
-            </button>
+            </Button>
           ))}
-          <button style={keyButton} onClick={() => setCpfDraft((v) => v.slice(0, -1))} aria-label="Apagar">
+          <Button
+            size="touch"
+            variant="secondary"
+            className="w-28 px-0"
+            onClick={() => setCpfDraft((v) => v.slice(0, -1))}
+            aria-label="Apagar"
+          >
             Apagar
-          </button>
-          <button style={keyButton} onClick={() => setCpfDraft((v) => (v + "0").slice(0, 11))}>
+          </Button>
+          <Button
+            size="touch"
+            variant="secondary"
+            className="w-28 px-0 font-semibold"
+            onClick={() => setCpfDraft((v) => (v + "0").slice(0, 11))}
+          >
             0
-          </button>
-          <button style={keyButton} onClick={() => setCpfDraft("")}>
+          </Button>
+          <Button size="touch" variant="secondary" className="w-28 px-0" onClick={() => setCpfDraft("")}>
             Limpar
-          </button>
+          </Button>
         </div>
-        <button style={bigButton} onClick={() => saveCpf(cpfDraft)} disabled={cpfDraft.length !== 11}>
+        <Button size="touch" onClick={() => saveCpf(cpfDraft)} disabled={cpfDraft.length !== 11}>
           Confirmar
-        </button>
-        <button style={{ ...bigButton, fontSize: 20 }} onClick={() => saveCpf(null)}>
+        </Button>
+        <Button size="touch" variant="secondary" onClick={() => saveCpf(null)}>
           Sem CPF
-        </button>
-        <button
-          style={{ ...bigButton, fontSize: 20 }}
+        </Button>
+        <Button
+          size="touch"
+          variant="secondary"
           onClick={() => {
             setKeypad(false);
             setCpfDraft("");
           }}
         >
           Voltar
-        </button>
+        </Button>
       </Screen>
     );
   }
   return (
     <Screen title="Seu carrinho">
-      {paymentNotice(sale) && <p role="alert">{paymentNotice(sale)}</p>}
-      {notice && <p role="alert">{notice}</p>}
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      {paymentNotice(sale) && <Alert tone="warning" className="text-xl">{paymentNotice(sale)}</Alert>}
+      {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
+      <ul className="m-0 w-full max-w-2xl list-none space-y-3 p-0">
         {sale.items.map((i) => (
-          <li key={i.id} style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "center" }}>
-            <button style={{ fontSize: 28, width: 56 }} onClick={() => changeQuantity(i, -1)} aria-label="Menos">
+          <li key={i.id} className="flex items-center justify-center gap-4">
+            <Button size="touch" variant="secondary" className="w-16 px-0" onClick={() => changeQuantity(i, -1)} aria-label="Menos">
               -
-            </button>
-            <span>
+            </Button>
+            <span className="flex-1">
               {i.quantity} x {i.productName} ({formatBRL(i.unitPriceCents)})
             </span>
-            <button style={{ fontSize: 28, width: 56 }} onClick={() => changeQuantity(i, 1)} aria-label="Mais">
+            <Button size="touch" variant="secondary" className="w-16 px-0" onClick={() => changeQuantity(i, 1)} aria-label="Mais">
               +
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
-      <p>
+      <p className="text-4xl">
         <strong>Total: {formatBRL(sale.totalCents)}</strong>
       </p>
-      <p>{sale.customerCpfMasked ? `CPF na nota: ${sale.customerCpfMasked}` : "Sem CPF na nota"}</p>
-      <button style={{ ...bigButton, fontSize: 20 }} onClick={() => setKeypad(true)}>
+      <p className="text-muted">{sale.customerCpfMasked ? `CPF na nota: ${sale.customerCpfMasked}` : "Sem CPF na nota"}</p>
+      <Button size="touch" variant="secondary" onClick={() => setKeypad(true)}>
         {sale.customerCpfMasked ? "Alterar CPF" : "CPF na nota"}
-      </button>
-      <button style={bigButton} onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
+      </Button>
+      <Button size="touch" className="min-w-72" onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
         Pagar com Pix
-      </button>
-      <button style={bigButton} onClick={() => startPay("card")} disabled={sale.items.length === 0}>
+      </Button>
+      <Button size="touch" className="min-w-72" onClick={() => startPay("card")} disabled={sale.items.length === 0}>
         Pagar com cartão
-      </button>
-      <button style={{ ...bigButton, fontSize: 20 }} onClick={cancel}>
+      </Button>
+      <Button size="touch" variant="secondary" onClick={cancel}>
         Cancelar
-      </button>
+      </Button>
     </Screen>
   );
 }
