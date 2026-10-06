@@ -2,12 +2,13 @@
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cx } from "./cx";
-import { Logo } from "./Logo";
+import type { Branding } from "@/domain/branding";
+import { MarketBrand, PoweredBy } from "./MarketBrand";
 import { Icon, type IconName } from "./Icon";
 
 export type NavItem = { href: string; label: string; exact?: boolean; icon?: IconName };
 
-export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNode }) {
+export function Sidebar({ items, footer, brand }: { items: NavItem[]; footer?: ReactNode; brand?: Branding | null }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -26,7 +27,7 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
   return (
     <>
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
-        <Logo className="h-6 w-auto" />
+        <MarketBrand brand={brand} compact />
         <button
           ref={menuButton}
           type="button"
@@ -46,8 +47,7 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
         )}
       >
         <div className="hidden px-6 pt-8 pb-7 md:block">
-          <Logo className="h-8 w-auto" />
-          <p className="mt-3 text-xs text-muted">Gestão de mercados autônomos</p>
+          <MarketBrand brand={brand} />
         </div>
         <p className="px-6 pt-4 pb-3 text-[10px] font-semibold tracking-[0.18em] text-muted uppercase">Área de gestão</p>
         <nav aria-label="Principal" className="flex flex-col gap-1.5 px-3 pb-5">
@@ -78,6 +78,7 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
           <p className="text-sm font-semibold">Sua operação, conectada.</p>
           <p className="mt-1 text-xs leading-relaxed text-muted">Estoque, vendas e autoatendimento em um só lugar.</p>
         </div>
+        <div className="px-4 pt-5 pb-2"><PoweredBy /></div>
         {footer && <div className="mt-4 border-t border-border px-3 py-4">{footer}</div>}
       </aside>
     </>

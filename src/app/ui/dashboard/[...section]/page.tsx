@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { Badge, Button, ButtonLink, Card, Field, Icon, Input, PageHeader, StatCard, Table, type IconName } from "@/ui";
 
+import { MarketBrand, PoweredBy } from "@/ui/MarketBrand";
+
 type Screen = { title: string; description: string; icon: IconName; columns: string[]; rows: string[][]; form?: { title: string; fields: string[] } };
 const screens: Record<string, Screen> = {
   products: { title: "Produtos", description: "Seu catálogo centralizado, com códigos de barras e dados fiscais.", icon: "product", columns: ["Produto", "Categoria", "Código de barras", "NCM"], rows: [["Água mineral 500 ml", "Bebidas", "7891000100103", "22011000"], ["Café gelado 250 ml", "Bebidas", "7891000100104", "Sem NCM"], ["Biscoito integral", "Mercearia", "7891000100105", "19053100"]], form: { title: "Novo produto", fields: ["Nome", "Categoria", "Códigos de barras"] } },
@@ -16,6 +18,15 @@ export default async function ScreenPreview({ params }: { params: Promise<{ sect
   if (process.env.NODE_ENV === "production") notFound();
   const { section } = await params;
   const key = section.join("/");
+  if (key === "settings/branding") return <main className="space-y-6">
+    <PageHeader icon="market" title="Sua marca" description="Dê a sua identidade ao painel e ao autoatendimento dos seus mercados." />
+    <div className="grid items-start gap-6 lg:grid-cols-[1.2fr_1fr]">
+      <Card icon="market" title="Identidade do mercado" description="Esta marca aparece em todos os mercados da sua organização.">
+        <fieldset disabled className="space-y-5"><Field label="Nome da marca"><Input defaultValue="Mercado Aurora" /></Field><Field label="Logo do mercado"><Input type="file" accept="image/png,image/jpeg,image/webp" /></Field><p className="text-sm text-muted">PNG, JPG ou WebP de até 512 KB. Sua logo será exibida inteira, sem cortes.</p><Button>Salvar minha marca</Button></fieldset>
+      </Card>
+      <Card title="Veja como fica" description="Sua marca em destaque; a nossa assina a tecnologia."><div className="rounded-2xl border border-border bg-subtle p-8"><MarketBrand brand={{ name: "Mercado Aurora", logoDataUrl: null }} /><p className="mt-6 text-center text-sm text-muted">Bem-vindo ao seu mercado</p><div className="mt-8 border-t border-border pt-5"><PoweredBy /></div></div></Card>
+    </div>
+  </main>;
   if (section[0] === "sales" && section.length === 2) {
     const index = ["exemplo-1", "exemplo-2"].indexOf(section[1]);
     if (index < 0) notFound();

@@ -7,7 +7,7 @@ import { addItemByBarcode } from "@/domain/sales";
 import { fakeProvider } from "@/payments/fake";
 
 const TABLES = [
-  "access_events", "access_people", "access_sources",
+  "organization_branding", "access_events", "access_people", "access_sources",
   "terminal_commands", "agent_releases",
   "fiscal_documents", "payments", "sale_items", "sales", "terminals",
   "stock_lots", "stock_movements", "market_products", "product_barcodes", "products",

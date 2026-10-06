@@ -19,7 +19,7 @@ describe("development previews", () => {
     vi.stubEnv("NODE_ENV", "production");
     expect(() => PdvPreview()).toThrow();
   });
-  it.each(["products", "terminals", "team", "settings/payments", "markets/aurora", "markets/aurora/access"])("renders %s without enabling fixture writes", async (section) => {
+  it.each(["products", "terminals", "team", "settings/payments", "settings/branding", "markets/aurora", "markets/aurora/access"])("renders %s without enabling fixture writes", async (section) => {
     vi.stubEnv("NODE_ENV", "development");
     const page = await ScreenPreview({ params: Promise.resolve({ section: section.split("/") }) });
     const html = renderToStaticMarkup(page);

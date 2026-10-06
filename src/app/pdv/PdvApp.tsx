@@ -1,12 +1,17 @@
 "use client";
 import QRCode from "qrcode";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import { formatBRL } from "@/lib/money";
 import { formatCpfDraft } from "@/pdv/cpf";
 import { paymentNotice } from "@/pdv/notice";
 import { createScanner } from "@/pdv/scanner";
 import { tokenFromHash } from "@/pdv/token";
-import { Alert, Button, Icon, type IconName, Input, Logo } from "@/ui";
+import { Alert, Button, Icon, type IconName, Input } from "@/ui";
+
+import type { Branding } from "@/domain/branding";
+import { MarketBrand, PoweredBy } from "@/ui/MarketBrand";
+
+const BrandContext = createContext<Branding | null>(null);
 
 const TOKEN_KEY = "m77_terminal_token";
 
@@ -51,15 +56,16 @@ async function call(token: string, method: string, path: string, body?: unknown)
 }
 
 function Screen({ title, children, icon = "terminal" }: { title: string; children?: ReactNode; icon?: IconName }) {
+  const brand = useContext(BrandContext);
   return (
     <main className="pdv-screen flex min-h-screen select-none flex-col items-center justify-center gap-6 px-4 py-8 text-center text-2xl sm:px-8 sm:text-3xl">
-      <Logo className="h-10 w-auto sm:h-12" />
+      <MarketBrand brand={brand} />
       <div className="flex w-full max-w-5xl flex-col items-center gap-6 rounded-3xl border border-border bg-surface px-5 py-8 shadow-sm sm:px-10 sm:py-10">
         <span className="flex size-20 items-center justify-center rounded-3xl bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-200"><Icon name={icon} className="size-10" /></span>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{title}</h1>
         {children}
       </div>
-      <p className="text-sm text-muted">Market77 · Autoatendimento</p>
+      <PoweredBy />
     </main>
   );
 }
@@ -77,6 +83,11 @@ export function PdvWelcome({ notice = "" }: { notice?: string }) {
 }
 
 export default function PdvApp() {
+  const [brand, setBrand] = useState<Branding | null>(null);
+  return <BrandContext.Provider value={brand}><PdvSession onBrand={setBrand} /></BrandContext.Provider>;
+}
+
+function PdvSession({ onBrand }: { onBrand: (brand: Branding | null) => void }) {
   const [token, setToken] = useState<string | null | undefined>(undefined); // undefined: not read yet
   const [sale, setSale] = useState<Sale | null>(null);
   const [notice, setNotice] = useState("");
@@ -120,6 +131,21 @@ export default function PdvApp() {
     }
     setToken(readToken());
   }, []);
+  useEffect(() => {
+    onBrand(null);
+    if (!token) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/pdv/branding", { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
+        if (active && res.ok) onBrand((await res.json()).branding);
+        else if (active && res.status === 401) onBrand(null);
+      } catch { /* Keep the current identity while offline. */ }
+    };
+    void load();
+    const id = setInterval(() => void load(), 60_000);
+    return () => { active = false; clearInterval(id); };
+  }, [token, onBrand]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);

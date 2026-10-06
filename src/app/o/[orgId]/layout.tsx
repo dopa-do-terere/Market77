@@ -1,6 +1,8 @@
 import { requireOrgPage } from "@/auth/guard";
 import { can } from "@/auth/permissions";
 import { Button, Icon, type NavItem, Sidebar } from "@/ui";
+import { withOrg } from "@/db/tenant";
+import { getBranding } from "@/domain/branding";
 import { logoutAction } from "./actions";
 
 export default async function OrgLayout({
@@ -12,6 +14,7 @@ export default async function OrgLayout({
 }) {
   const { orgId } = await params;
   const { role } = await requireOrgPage(orgId);
+  const brand = await withOrg(orgId, getBranding);
   const base = `/o/${orgId}`;
   const items: NavItem[] = [
     { href: base, label: "Painel", exact: true, icon: "dashboard" },
@@ -20,6 +23,7 @@ export default async function OrgLayout({
     ...(can(role, "sale:read") ? [{ href: `${base}/sales`, label: "Vendas", icon: "sales" as const }] : []),
     ...(can(role, "terminal:write") ? [{ href: `${base}/terminals`, label: "Totens", icon: "terminal" as const }] : []),
     ...(can(role, "payment:write") ? [{ href: `${base}/settings/payments`, label: "Pagamentos", icon: "payment" as const }] : []),
+    ...(can(role, "branding:write") ? [{ href: `${base}/settings/branding`, label: "Sua marca", icon: "market" as const }] : []),
     ...(can(role, "member:write") ? [{ href: `${base}/team`, label: "Equipe", icon: "team" as const }] : []),
   ];
   return (
@@ -27,6 +31,7 @@ export default async function OrgLayout({
       <a href="#workspace-content" className="sr-only fixed top-4 left-4 z-50 rounded-lg bg-surface p-3 focus:not-sr-only">Pular para o conteúdo</a>
       <Sidebar
         items={items}
+        brand={brand}
         footer={
           <form action={logoutAction}>
             <Button type="submit" variant="ghost" className="w-full justify-start">

@@ -1,4 +1,6 @@
 const MESSAGES: Record<string, string> = {
+  logo_size: "A logo deve ter até 512 KB.",
+  logo_format: "Escolha uma logo válida em PNG, JPG ou WebP.",
   invalid_input: "Dados inválidos. Confira os campos.",
   email_taken: "Já existe uma conta com este e-mail.",
   invalid_credentials: "E-mail ou senha incorretos.",

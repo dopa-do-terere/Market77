@@ -13,6 +13,7 @@ export default function PreviewLayout({ children }: { children: ReactNode }) {
         { href: "/ui/dashboard/sales", label: "Vendas", icon: "sales" },
         { href: "/ui/dashboard/terminals", label: "Totens", icon: "terminal" },
         { href: "/ui/dashboard/settings/payments", label: "Pagamentos", icon: "payment" },
+        { href: "/ui/dashboard/settings/branding", label: "Sua marca", icon: "market" },
         { href: "/ui/dashboard/team", label: "Equipe", icon: "team" },
         { href: "/ui/pdv", label: "Prévia do PDV", icon: "scan" },
         { href: "/ui", label: "Componentes", icon: "product", exact: true },

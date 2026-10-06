@@ -54,6 +54,7 @@ Cada **organização** (dono) tem os próprios mercados, produtos, totens e cred
 | **NFC-e** | Emissão em segundo plano a cada venda paga, com fila, novas tentativas e reemissão (provedor simulado) |
 | **Agente do totem** | Serviço no mini PC do totem: abre o PDV em tela cheia, envia heartbeat e executa comandos remotos (reiniciar, reboot, atualizar) |
 | **Controle de acesso** | Registro de entradas vindas de um leitor, sem guardar imagem nem template facial; esquecimento de pessoa e retenção de 90 dias |
+| **Sua marca** | Nome e logo próprios no painel e no PDV, com prévia e assinatura discreta Market77; configuração exclusiva do dono |
 | **Painel do dono** | Mercados, produtos, equipe, totens, vendas, validade, pagamentos e acessos, com permissões por papel (dono, gerente, repositor); interface com modo claro e escuro |
 
 ## Arquitetura
