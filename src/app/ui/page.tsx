@@ -21,7 +21,7 @@ export default function UiReferencePage() {
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-10">
       <Logo className="h-10 w-auto" />
-      <a href="/ui/dashboard" className="text-sm font-semibold text-link hover:underline">Abrir prévia do painel →</a>
+      <div className="flex flex-wrap gap-4"><a href="/ui/dashboard" className="text-sm font-semibold text-link hover:underline">Explorar as telas do painel →</a><a href="/ui/pdv" className="text-sm font-semibold text-link hover:underline">Prévia do autoatendimento →</a></div>
       <PageHeader title="Componentes" description="Referência visual. Só existe fora de produção." actions={<Button>Ação</Button>} />
       <Card title="Botões">
         <div className="flex flex-wrap items-center gap-3">

@@ -25,27 +25,28 @@ export default async function SaleDetailPage({
   return (
     <main className="space-y-6">
       <PageHeader
-        title="Venda"
+        icon="sales"
+        title="Detalhes da venda"
         description={`${sale.marketName}, ${when(sale.createdAt)}`}
         actions={<Badge tone={SALE_TONE[sale.status] ?? "neutral"}>{STATUS_LABEL[sale.status] ?? sale.status}</Badge>}
       />
       {error && <Alert tone="danger">{message(error)}</Alert>}
-      <Card>
+      <Card className="metric-featured">
         <p className="text-sm font-medium text-muted">Total</p>
         <p className="mt-1 text-3xl font-semibold">{formatBRL(sale.totalCents)}</p>
         {sale.paidAt && <p className="text-sm text-muted">Paga em {when(sale.paidAt)}</p>}
         {sale.customerCpfMasked && <p className="mt-2 text-sm">CPF na nota: {sale.customerCpfMasked}</p>}
       </Card>
-      <Card title="Itens">
+      <Card icon="product" title="Itens da compra">
         <ul className="-my-4 divide-y divide-border">
           {sale.items.map((i, idx) => (
-            <li key={idx} className="py-3">
-              {i.quantity} x {i.productName} a {formatBRL(i.unitPriceCents)}
+            <li key={idx} className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <span className="font-medium">{i.quantity} × {i.productName}</span><span className="text-sm text-muted">{formatBRL(i.unitPriceCents)} por unidade</span>
             </li>
           ))}
         </ul>
       </Card>
-      <Card title="Pagamentos">
+      <Card icon="payment" title="Pagamentos">
         {sale.payments.length === 0 && <p className="text-muted">Nenhum pagamento iniciado.</p>}
         <ul className="-my-4 divide-y divide-border">
           {sale.payments.map((p) => (
@@ -65,7 +66,7 @@ export default async function SaleDetailPage({
         </ul>
       </Card>
       {sale.fiscal && (
-        <Card title="Nota fiscal">
+        <Card icon="sales" title="Nota fiscal">
           <div className="space-y-2">
             <p className="flex flex-wrap items-center gap-2">
               <Badge tone={FISCAL_TONE[sale.fiscal.status] ?? "neutral"}>

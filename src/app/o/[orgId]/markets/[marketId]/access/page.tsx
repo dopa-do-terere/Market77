@@ -15,7 +15,7 @@ import { listMarkets } from "@/domain/markets";
 import { formatDay } from "@/domain/lots";
 import { AppError } from "@/lib/errors";
 import { message } from "@/lib/messages";
-import { Alert, Badge, Button, Card, PageHeader, Table } from "@/ui";
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, StatCard, PageHeader, Table } from "@/ui";
 import { AccessSourceForm } from "./AccessSourceForm";
 import { forgetAccessPersonAction, revokeAccessSourceAction } from "./actions";
 
@@ -68,18 +68,31 @@ export default async function AccessPage({
       : e.status === "unregistered"
         ? `Pessoa não cadastrada (id ${e.personExternalId})`
         : "Não identificada";
+  const selectedSummary = summary.find((r) => r.day === chosen);
+  const maxHourly = Math.max(1, ...hourly.map((h) => h.entries));
   return (
     <main className="space-y-6">
-      <PageHeader title={`Acessos: ${market.name}`} />
+      <PageHeader icon="team" title="Acessos" description={`Entradas e leitores de ${market.name}.`} />
       {(error || dayError) && <Alert tone="danger">{message(error ?? dayError ?? "")}</Alert>}
 
+      <Card icon="dashboard" title="Período de consulta">
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <Field label="Dia"><Input name="day" type="date" defaultValue={chosen} required /></Field>
+          <Button type="submit">Consultar acessos</Button>
+        </form>
+      </Card>
+      {selectedSummary && <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Entradas no dia" value={selectedSummary.entries} note={formatDay(selectedSummary.day)} icon="team" featured />
+        <StatCard label="Pessoas no dia" value={selectedSummary.people} note="Pessoas distintas registradas" icon="team" />
+        <StatCard label="Vendas pagas no dia" value={selectedSummary.paidSales} note="Pedidos confirmados nesta unidade" icon="sales" />
+      </div>}
       <section className="space-y-3">
-        <h2 className="text-base font-semibold">Resumo por dia</h2>
-        <Table>
+        <Table title="Resumo por dia" description="Compare entradas, pessoas e vendas pagas da unidade.">
           <thead>
             <tr><th>Dia</th><th>Entradas</th><th>Pessoas</th><th>Vendas pagas</th><th>Vendas por entrada</th></tr>
           </thead>
           <tbody>
+            {summary.length === 0 && <tr><td colSpan={5}><EmptyState icon="team" title="Ainda não há acessos" description="As entradas aparecerão aqui quando um leitor conectado enviar os primeiros eventos." /></td></tr>}
             {summary.map((r) => (
               <tr key={r.day}>
                 <td><a href={`?day=${r.day}`} className="font-medium text-link hover:underline">{formatDay(r.day)}</a></td>
@@ -107,7 +120,7 @@ export default async function AccessPage({
               </thead>
               <tbody>
                 {hourly.filter((h) => h.entries > 0).map((h) => (
-                  <tr key={h.hour}><td>{String(h.hour).padStart(2, "0")}h</td><td>{h.entries}</td></tr>
+                  <tr key={h.hour}><td className="w-24 tabular-nums">{String(h.hour).padStart(2, "0")}h</td><td><div className="flex items-center gap-3"><div aria-hidden="true" className="h-2 max-w-md flex-1 overflow-hidden rounded-full bg-subtle"><div className="h-full rounded-full bg-brand-700" style={{ width: `${h.entries / maxHourly * 100}%` }} /></div><span className="w-10 text-right font-semibold tabular-nums">{h.entries}</span></div></td></tr>
                 ))}
               </tbody>
             </Table>
@@ -115,8 +128,8 @@ export default async function AccessPage({
         )
       )}
 
-      <Card title="Acessos recentes">
-        {recent.length === 0 && <p className="text-muted">Nenhum acesso registrado ainda.</p>}
+      <Card icon="team" title="Acessos recentes" description="Últimas entradas registradas pelos leitores.">
+        {recent.length === 0 && <EmptyState icon="team" title="Nenhum acesso registrado" description="As novas entradas aparecerão nesta lista." />}
         <ul className="-my-4 divide-y divide-border">
           {recent.map((e) => (
             <li key={e.id} className="py-3">
@@ -126,8 +139,8 @@ export default async function AccessPage({
         </ul>
       </Card>
 
-      <Card title="Pessoas">
-        {people.length === 0 && <p className="text-muted">Nenhuma pessoa sincronizada ainda.</p>}
+      <Card icon="team" title="Pessoas" description="Cadastros sincronizados com os leitores desta unidade.">
+        {people.length === 0 && <EmptyState icon="team" title="Nenhuma pessoa sincronizada" description="Os cadastros disponíveis no leitor aparecem após a sincronização." />}
         <ul className="-my-4 divide-y divide-border">
           {people.map((p) => (
             <li key={p.id} className="py-3">
@@ -150,7 +163,7 @@ export default async function AccessPage({
         </ul>
       </Card>
 
-      <Card title="Leitores">
+      <Card icon="terminal" title="Leitores" description="Equipamentos conectados ao controle de acesso.">
         <div className="space-y-4">
           {canWrite && <AccessSourceForm orgId={orgId} marketId={marketId} />}
           {sources.length === 0 && <p className="text-muted">Nenhum leitor cadastrado.</p>}

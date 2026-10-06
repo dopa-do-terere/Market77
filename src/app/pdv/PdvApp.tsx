@@ -6,7 +6,7 @@ import { formatCpfDraft } from "@/pdv/cpf";
 import { paymentNotice } from "@/pdv/notice";
 import { createScanner } from "@/pdv/scanner";
 import { tokenFromHash } from "@/pdv/token";
-import { Alert, Button, Input, Logo } from "@/ui";
+import { Alert, Button, Icon, type IconName, Input, Logo } from "@/ui";
 
 const TOKEN_KEY = "m77_terminal_token";
 
@@ -50,12 +50,29 @@ async function call(token: string, method: string, path: string, body?: unknown)
   return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
 }
 
-function Screen({ title, children }: { title: string; children?: ReactNode }) {
+function Screen({ title, children, icon = "terminal" }: { title: string; children?: ReactNode; icon?: IconName }) {
   return (
-    <main className="flex min-h-screen select-none flex-col items-center justify-center gap-5 p-6 text-center text-3xl">
-      <h1 className="text-5xl font-semibold tracking-tight">{title}</h1>
-      {children}
+    <main className="pdv-screen flex min-h-screen select-none flex-col items-center justify-center gap-6 px-4 py-8 text-center text-2xl sm:px-8 sm:text-3xl">
+      <Logo className="h-10 w-auto sm:h-12" />
+      <div className="flex w-full max-w-5xl flex-col items-center gap-6 rounded-3xl border border-border bg-surface px-5 py-8 shadow-sm sm:px-10 sm:py-10">
+        <span className="flex size-20 items-center justify-center rounded-3xl bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-200"><Icon name={icon} className="size-10" /></span>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{title}</h1>
+        {children}
+      </div>
+      <p className="text-sm text-muted">Market77 · Autoatendimento</p>
     </main>
+  );
+}
+
+export function PdvWelcome({ notice = "" }: { notice?: string }) {
+  return (
+      <Screen title="Sua compra começa aqui" icon="scan">
+        <p className="text-muted">Escaneie um produto para começar.</p>
+        <div className="mt-3 grid w-full max-w-2xl gap-3 text-left sm:grid-cols-3">
+          {["Escaneie os produtos", "Confira seu carrinho", "Pague com Pix ou cartão"].map((step, index) => <div key={step} className="rounded-2xl bg-subtle p-4"><span className="text-xl font-semibold text-link">0{index + 1}</span><p className="mt-2 text-xl font-medium">{step}</p></div>)}
+        </div>
+        {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
+      </Screen>
   );
 }
 
@@ -271,8 +288,8 @@ export default function PdvApp() {
   if (token === undefined) return null;
   if (!token) {
     return (
-      <Screen title="Configurar totem">
-        <p>Cole o token do totem (gerado no painel, em Totens).</p>
+      <Screen title="Configurar totem" icon="terminal">
+        <p className="max-w-2xl text-2xl leading-relaxed text-muted">Cole o token gerado no painel, em Totens, para conectar este equipamento.</p>
         <Input
           touch
           value={draft}
@@ -290,18 +307,10 @@ export default function PdvApp() {
   if (revoked) return <Screen title="Totem desativado">Procure o responsável pela loja.</Screen>;
   if (offline) return <Screen title="Totem indisponível">Sem conexão. Tentando novamente...</Screen>;
 
-  if (!sale) {
-    return (
-      <Screen title="Bem-vindo">
-        <Logo className="h-16 w-auto" />
-        <p className="text-muted">Escaneie um produto para começar.</p>
-        {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
-      </Screen>
-    );
-  }
+  if (!sale) return <PdvWelcome notice={notice} />;
   if (sale.status === "paid") {
     return (
-      <Screen title="Obrigado!">
+      <Screen title="Obrigado!" icon="check">
         <p>Pagamento confirmado.</p>
       </Screen>
     );
@@ -309,7 +318,7 @@ export default function PdvApp() {
   if (sale.status === "awaiting_payment" && sale.payment?.method === "card") {
     const left = Math.max(0, Math.round((new Date(sale.payment.expiresAt).getTime() - now) / 1000));
     return (
-      <Screen title={`Pague ${formatBRL(sale.totalCents)} no cartão`}>
+      <Screen title={`Pague ${formatBRL(sale.totalCents)} no cartão`} icon="payment">
         <p>Siga as instruções na maquininha.</p>
         <p className="text-muted">
           Tempo restante: {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
@@ -324,7 +333,7 @@ export default function PdvApp() {
   if (sale.status === "awaiting_payment") {
     const left = Math.max(0, Math.round((new Date(sale.payment?.expiresAt ?? 0).getTime() - now) / 1000));
     return (
-      <Screen title={`Pague ${formatBRL(sale.totalCents)} com Pix`}>
+      <Screen title={`Pague ${formatBRL(sale.totalCents)} com Pix`} icon="payment">
         {qr && <img src={qr} alt="QR code do Pix" width={320} height={320} className="rounded-xl bg-white p-2" />}
         <p className="max-w-xl break-all text-lg text-muted">{sale.payment?.qrPayload}</p>
         <p>Expira em {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</p>
@@ -333,10 +342,10 @@ export default function PdvApp() {
   }
   if (keypad) {
     return (
-      <Screen title="CPF na nota">
+      <Screen title="CPF na nota" icon="sales">
         <p className="min-h-12 text-4xl tracking-widest">{formatCpfDraft(cpfDraft) || "Digite o CPF"}</p>
         {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid w-full max-w-sm grid-cols-3 gap-3 [&>button]:w-full [&>button]:px-2">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
             <Button
               key={d}
@@ -389,37 +398,40 @@ export default function PdvApp() {
     );
   }
   return (
-    <Screen title="Seu carrinho">
+    <Screen title="Seu carrinho" icon="product">
       {paymentNotice(sale) && <Alert tone="warning" className="text-xl">{paymentNotice(sale)}</Alert>}
       {notice && <Alert tone="warning" className="text-xl">{notice}</Alert>}
       <ul className="m-0 w-full max-w-2xl list-none space-y-3 p-0">
         {sale.items.map((i) => (
-          <li key={i.id} className="flex items-center justify-center gap-4">
-            <Button size="touch" variant="secondary" className="w-16" onClick={() => changeQuantity(i, -1)} aria-label="Menos">
+          <li key={i.id} className="flex items-center justify-center gap-3 rounded-2xl border border-border p-3 sm:gap-4 sm:p-4">
+            <Button size="touch" variant="secondary" className="w-16 shrink-0 px-0" onClick={() => changeQuantity(i, -1)} aria-label="Menos">
               -
             </Button>
-            <span className="flex-1">
-              {i.quantity} x {i.productName} ({formatBRL(i.unitPriceCents)})
+            <span className="min-w-0 flex-1 break-words text-left text-2xl">
+              <span className="block font-semibold">{i.quantity} × {i.productName}</span>
+              <span className="mt-1 block text-xl text-muted">{formatBRL(i.unitPriceCents)} por unidade</span>
             </span>
-            <Button size="touch" variant="secondary" className="w-16" onClick={() => changeQuantity(i, 1)} aria-label="Mais">
+            <Button size="touch" variant="secondary" className="w-16 shrink-0 px-0" onClick={() => changeQuantity(i, 1)} aria-label="Mais">
               +
             </Button>
           </li>
         ))}
       </ul>
-      <p className="text-4xl">
-        <strong>Total: {formatBRL(sale.totalCents)}</strong>
+      <p className="metric-featured flex w-full max-w-2xl flex-wrap items-center justify-between gap-3 rounded-2xl p-6 text-3xl sm:text-4xl">
+        <span className="text-2xl">Total da compra</span><strong className="tabular-nums">{formatBRL(sale.totalCents)}</strong>
       </p>
       <p className="text-muted">{sale.customerCpfMasked ? `CPF na nota: ${sale.customerCpfMasked}` : "Sem CPF na nota"}</p>
       <Button size="touch" variant="secondary" onClick={() => setKeypad(true)}>
         {sale.customerCpfMasked ? "Alterar CPF" : "CPF na nota"}
       </Button>
-      <Button size="touch" className="min-w-72" onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
+      <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+      <Button size="touch" className="px-4" onClick={() => startPay("pix")} disabled={sale.items.length === 0}>
         Pagar com Pix
       </Button>
-      <Button size="touch" className="min-w-72" onClick={() => startPay("card")} disabled={sale.items.length === 0}>
+      <Button size="touch" className="px-4" onClick={() => startPay("card")} disabled={sale.items.length === 0}>
         Pagar com cartão
       </Button>
+      </div>
       <Button size="touch" variant="secondary" onClick={cancel}>
         Cancelar
       </Button>

@@ -298,7 +298,8 @@ A navegação tem ícones e menu no celular, com temas claro e escuro automátic
 Login e cadastro compartilham a identidade visual e os componentes de formulário.
 
 Com `npm run dev`, abra `/ui` para os componentes ou `/ui/dashboard` para uma
-prévia do painel com dados ilustrativos. As duas rotas retornam 404 em produção.
+prévia navegável das seções do painel com dados ilustrativos e cadastros desabilitados.
+A prévia do autoatendimento está em `/ui/pdv`. Todas essas rotas retornam 404 em produção.
 
 ## Testes
 

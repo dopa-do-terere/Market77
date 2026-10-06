@@ -4,6 +4,7 @@ const paths = {
   dashboard: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   market: "M3 10V5h18v5 M3 5l2-3h14l2 3 M2 10a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 M4 13v8h16v-8 M9 21v-7h6v7",
   product: "m12 3 9 5-9 5-9-5 9-5z M3 8v9l9 5 9-5V8 M12 13v9 M7.5 5.5l9 5",
+  scan: "M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M7 7v10 M10 7v10 M14 7v10 M17 7v10",
   sales: "M5 3h14v18l-3-2-4 2-4-2-3 2V3z M9 7h6 M9 11h6 M9 15h3",
   terminal: "M5 3h14v13H5z M9 16v5 M15 16v5 M7 21h10 M9 7h6 M9 11h3",
   payment: "M3 5h18v14H3z M3 9h18 M7 15h3",

@@ -9,7 +9,7 @@ export function TerminalForm({ orgId, markets }: { orgId: string; markets: { id:
     {},
   );
   return (
-    <Card title="Novo totem">
+    <Card icon="plus" title="Novo totem" description="Vincule o equipamento a um mercado para iniciar a operação.">
       <form action={formAction} className="grid gap-4 sm:grid-cols-3">
         <Field label="Nome do totem">
           <Input name="name" required minLength={2} maxLength={60} />

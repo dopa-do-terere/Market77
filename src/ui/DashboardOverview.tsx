@@ -1,8 +1,9 @@
 import { formatBRL } from "@/lib/money";
 import { Alert } from "./Alert";
 import { Badge } from "./Badge";
-import { Icon, type IconName } from "./Icon";
+import { Icon } from "./Icon";
 import { PageHeader } from "./PageHeader";
+import { StatCard as Metric } from "./StatCard";
 
 export type DashboardMarket = { id: string; name: string; address: string | null; lowCount: number; expired: number };
 export type DashboardOverviewProps = {
@@ -13,19 +14,6 @@ export type DashboardOverviewProps = {
   fiscalErrors: number | null;
   canCreateMarket: boolean;
 };
-
-function Metric({ label, value, note, icon, featured = false }: { label: string; value: string | number; note: string; icon: IconName; featured?: boolean }) {
-  return (
-    <section className={`rounded-2xl border p-5 shadow-sm ${featured ? "metric-featured" : "border-border bg-surface"}`}>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-muted">{label}</h2>
-        <span className={`flex size-9 items-center justify-center rounded-xl ${featured ? "bg-white/10 text-brand-200" : "bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-200"}`}><Icon name={icon} /></span>
-      </div>
-      <p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
-      <p className="mt-2 text-xs leading-relaxed text-muted">{note}</p>
-    </section>
-  );
-}
 
 export function DashboardOverview({ base, markets, today, offline, fiscalErrors, canCreateMarket }: DashboardOverviewProps) {
   const lowCount = markets.reduce((sum, market) => sum + market.lowCount, 0);

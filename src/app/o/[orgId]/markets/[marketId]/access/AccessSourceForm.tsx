@@ -9,7 +9,7 @@ export function AccessSourceForm({ orgId, marketId }: { orgId: string; marketId:
     {},
   );
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-xl border border-border bg-subtle p-4">
       <form action={formAction} className="flex flex-wrap items-end gap-3">
         <Field label="Nome do leitor">
           <Input name="name" required minLength={2} maxLength={60} />

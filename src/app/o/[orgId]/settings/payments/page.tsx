@@ -27,11 +27,11 @@ export default async function PaymentsSettingsPage({
   const base = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   return (
     <main className="space-y-6">
-      <PageHeader title="Pagamentos (Mercado Pago)" />
+      <PageHeader icon="payment" title="Pagamentos" description="Conecte sua conta Mercado Pago para receber por Pix e cartão." />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       {ok && OK[ok] && <Alert tone="success">{OK[ok]}</Alert>}
-      <Card title="Conexão">
-        <p className="mb-4 flex flex-wrap items-center gap-2">
+      <Card icon="payment" title="Conexão com Mercado Pago" description="Credenciais da conta que recebe os pagamentos da organização.">
+        <p className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-subtle p-4 text-sm">
           {status.configured ? (
             <>
               <Badge tone="success">Conectado</Badge>
@@ -58,7 +58,7 @@ export default async function PaymentsSettingsPage({
           </div>
         </form>
         {status.configured && (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-5">
             <form action={testCredentialsAction.bind(null, orgId)}>
               <Button type="submit" variant="secondary">Testar</Button>
             </form>
@@ -68,7 +68,7 @@ export default async function PaymentsSettingsPage({
           </div>
         )}
       </Card>
-      <Card title="URLs de webhook">
+      <Card icon="terminal" title="Notificações de pagamento" description="Configure a comunicação do Mercado Pago com seus mercados.">
         <p className="mb-3 text-muted">
           No painel do Mercado Pago, cadastre esta URL e ative os dois tópicos nela: Pagamentos (Pix) e Orders (Mercado Pago, cartão). Copie o segredo gerado para o campo acima.
         </p>

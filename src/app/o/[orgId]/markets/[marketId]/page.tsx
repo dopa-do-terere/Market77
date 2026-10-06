@@ -9,7 +9,7 @@ import { UFS, listMarkets } from "@/domain/markets";
 import { listProducts } from "@/domain/products";
 import { message } from "@/lib/messages";
 import { formatBRL } from "@/lib/money";
-import { Alert, Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Table } from "@/ui";
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, StatCard, Field, Input, PageHeader, Select, Table } from "@/ui";
 import { moveStockAction, setMarketProductAction, updateMarketFiscalAction } from "./actions";
 
 export default async function MarketPage({
@@ -40,8 +40,9 @@ export default async function MarketPage({
   return (
     <main className="space-y-6">
       <PageHeader
-        title="Estoque do mercado"
-        description={market?.name}
+        icon="market"
+        title={market?.name ?? "Estoque do mercado"}
+        description="Produtos, reposição e validade da sua unidade."
         actions={
           can(role, "access:read") && (
             <a href={`/o/${orgId}/markets/${marketId}/access`} className="text-sm font-medium text-link hover:underline">
@@ -51,11 +52,17 @@ export default async function MarketPage({
         }
       />
       {error && <Alert tone="danger">{message(error)}</Alert>}
-      <Table>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Produtos na unidade" value={rows.length} note="Itens vinculados a este mercado" icon="product" featured />
+        <StatCard label="Precisam de reposição" value={rows.filter((r) => r.balance <= r.minStock).length} note="Saldo igual ou abaixo do estoque mínimo" icon="market" />
+        <StatCard label="Lotes vencidos" value={alerts.filter((a) => a.status === "expired").length} note="Confira a seção de validade abaixo" icon="warning" />
+      </div>
+      <Table title="Estoque e movimentações" description="Consulte saldos e registre entradas, perdas e ajustes.">
         <thead>
           <tr><th>Produto</th><th>Preço</th><th>Mínimo</th><th>Saldo</th><th>Ativo</th><th>Validade</th><th>Movimentar</th></tr>
         </thead>
         <tbody>
+          {rows.length === 0 && <tr><td colSpan={7}><EmptyState icon="product" title="Prepare as prateleiras" description="Vincule os produtos do catálogo a este mercado para definir preços e registrar estoque." /></td></tr>}
           {rows.map((r) => (
             <tr key={r.id}>
               <td className="font-medium">{r.name}</td>
@@ -107,8 +114,8 @@ export default async function MarketPage({
         </tbody>
       </Table>
       {alerts.length === 0 ? (
-        <Card title="Validade">
-          <p className="text-muted">Nenhum lote vencido ou vencendo em 7 dias.</p>
+        <Card icon="check" title="Validade em dia">
+          <p className="text-sm text-muted">Nenhum lote vencido ou vencendo nos próximos 7 dias.</p>
         </Card>
       ) : (
         <section className="space-y-3">
@@ -133,7 +140,7 @@ export default async function MarketPage({
         </section>
       )}
       {can(role, "price:write") && (
-        <Card title="Adicionar ou atualizar produto neste mercado">
+        <Card icon="product" title="Produtos deste mercado" description="Vincule um produto ou atualize preço, estoque mínimo e controle de validade.">
           <form action={setMarketProductAction.bind(null, orgId, marketId)} className="grid gap-4 sm:grid-cols-3">
             <Field label="Produto">
               <Select name="productId" required>
@@ -159,7 +166,7 @@ export default async function MarketPage({
         </Card>
       )}
       {market && can(role, "market:write") && (
-        <Card title="Dados fiscais (NFC-e)">
+        <Card icon="sales" title="Dados fiscais (NFC-e)" description="Configure a emissão de notas para esta unidade.">
           <form action={updateMarketFiscalAction.bind(null, orgId, marketId)} className="grid gap-4 sm:grid-cols-3">
             <div className="flex items-end sm:col-span-3">
               <Checkbox name="nfceEnabled" label="Emitir NFC-e" defaultChecked={market.nfceEnabled} />

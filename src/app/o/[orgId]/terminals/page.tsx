@@ -7,7 +7,7 @@ import { listMarkets } from "@/domain/markets";
 import { listTerminals } from "@/domain/terminals";
 import { COMMAND_LABEL, COMMAND_STATUS_LABEL } from "@/lib/labels";
 import { message } from "@/lib/messages";
-import { Alert, Badge, Button, COMMAND_TONE, Input, PageHeader, Table } from "@/ui";
+import { Alert, Badge, Button, COMMAND_TONE, EmptyState, StatCard, Input, PageHeader, Table } from "@/ui";
 import { TerminalForm } from "./TerminalForm";
 import { revokeTerminalAction, sendCommandAction, setTerminalDeviceAction } from "./actions";
 
@@ -36,17 +36,23 @@ export default async function TerminalsPage({
   );
   return (
     <main className="space-y-6">
-      <PageHeader title="Totens" />
+      <PageHeader icon="terminal" title="Totens" description="Acompanhe a conexão dos equipamentos e gerencie o autoatendimento." />
       {error && <Alert tone="danger">{message(error)}</Alert>}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Totens ativos" value={terminals.filter((t) => !t.revokedAt).length} note="Equipamentos com acesso autorizado" icon="terminal" featured />
+        <StatCard label="Online agora" value={terminals.filter((t) => !t.revokedAt && t.lastHeartbeatAt && isOnline(t.lastHeartbeatAt, now)).length} note="Com comunicação recente com o sistema" icon="check" />
+        <StatCard label="Sem comunicação" value={terminals.filter((t) => !t.revokedAt && (!t.lastHeartbeatAt || !isOnline(t.lastHeartbeatAt, now))).length} note="Offline ou ainda não conectados" icon="warning" />
+      </div>
       <TerminalForm orgId={orgId} markets={markets.map((m) => ({ id: m.id, name: m.name }))} />
       {markets.length === 0 && <Alert tone="info">Cadastre um mercado antes de cadastrar um totem.</Alert>}
-      <Table>
+      <Table title="Seus equipamentos" description="Conexão, versão do agente e comandos remotos por totem.">
         <thead>
           <tr>
             <th>Nome</th><th>Mercado</th><th>Estado</th><th>Última batida</th><th>Agente</th><th>PDV</th><th>Point</th><th>Ações</th>
           </tr>
         </thead>
         <tbody>
+          {terminals.length === 0 && <tr><td colSpan={8}><EmptyState icon="terminal" title="Conecte seu primeiro totem" description="Cadastre o equipamento e use o token gerado para ativar o autoatendimento." /></td></tr>}
           {terminals.map((t) => {
             const state = t.revokedAt
               ? "revogado"
