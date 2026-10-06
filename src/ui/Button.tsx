@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from "react";
 import { cx } from "./cx";
 
 const base =
@@ -20,4 +20,8 @@ export function Button({
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof variants; size?: keyof typeof sizes }) {
   return <button className={cx(base, variants[variant], sizes[size], className)} {...rest} />;
+}
+
+export function ButtonLink({ variant = "primary", className, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: keyof typeof variants }) {
+  return <a className={cx(base, variants[variant], "min-h-11 px-4 text-sm", className)} {...rest} />;
 }

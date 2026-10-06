@@ -1,6 +1,6 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cx } from "./cx";
 import { Logo } from "./Logo";
 import { Icon, type IconName } from "./Icon";
@@ -10,11 +10,15 @@ export type NavItem = { href: string; label: string; exact?: boolean; icon?: Ico
 export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     if (!open) return;
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        menuButton.current?.focus();
+      }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
@@ -24,6 +28,7 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
         <Logo className="h-6 w-auto" />
         <button
+          ref={menuButton}
           type="button"
           aria-expanded={open}
           aria-controls="sidebar-nav"

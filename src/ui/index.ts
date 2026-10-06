@@ -1,7 +1,7 @@
 export { Alert } from "./Alert";
 export { AuthShell } from "./AuthShell";
 export { Badge, type Tone } from "./Badge";
-export { Button } from "./Button";
+export { Button, ButtonLink } from "./Button";
 export { Card } from "./Card";
 export { EmptyState } from "./EmptyState";
 export { StatCard } from "./StatCard";

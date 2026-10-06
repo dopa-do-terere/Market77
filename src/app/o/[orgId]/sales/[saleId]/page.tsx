@@ -6,7 +6,7 @@ import { getSaleDetail } from "@/domain/sale-queries";
 import { FAILURE_LABEL, FISCAL_LABEL, METHOD_LABEL, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/labels";
 import { message } from "@/lib/messages";
 import { formatBRL } from "@/lib/money";
-import { Alert, Badge, Button, Card, FISCAL_TONE, PAYMENT_TONE, PageHeader, SALE_TONE } from "@/ui";
+import { Alert, Badge, Button, ButtonLink, Icon, Card, FISCAL_TONE, PAYMENT_TONE, PageHeader, SALE_TONE } from "@/ui";
 import { reissueFiscalAction } from "./actions";
 
 export default async function SaleDetailPage({
@@ -28,7 +28,7 @@ export default async function SaleDetailPage({
         icon="sales"
         title="Detalhes da venda"
         description={`${sale.marketName}, ${when(sale.createdAt)}`}
-        actions={<Badge tone={SALE_TONE[sale.status] ?? "neutral"}>{STATUS_LABEL[sale.status] ?? sale.status}</Badge>}
+        actions={<><Badge tone={SALE_TONE[sale.status] ?? "neutral"}>{STATUS_LABEL[sale.status] ?? sale.status}</Badge><ButtonLink href={`/o/${orgId}/sales`} variant="secondary"><Icon name="back" /> Vendas</ButtonLink></>}
       />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <Card className="metric-featured">

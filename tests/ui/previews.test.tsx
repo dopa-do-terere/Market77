@@ -31,4 +31,17 @@ describe("development previews", () => {
     vi.stubEnv("NODE_ENV", "development");
     await expect(ScreenPreview({ params: Promise.resolve({ section: ["unknown"] }) })).rejects.toThrow();
   });
+  it.each(["__proto__", "constructor", "markets/constructor", "markets/aurora/access/extra", "sales/unknown"])("returns 404 for invalid path %s", async (path) => {
+    vi.stubEnv("NODE_ENV", "development");
+    await expect(ScreenPreview({ params: Promise.resolve({ section: path.split("/") }) })).rejects.toThrow();
+  });
+  it("lets the illustrated sale list open a matching detail", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const list = renderToStaticMarkup(await ScreenPreview({ params: Promise.resolve({ section: ["sales"] }) }));
+    expect(list).toContain("/ui/dashboard/sales/exemplo-1");
+    const detail = renderToStaticMarkup(await ScreenPreview({ params: Promise.resolve({ section: ["sales", "exemplo-1"] }) }));
+    expect(detail).toContain("Detalhes da venda");
+    expect(detail).toContain("R$ 28,90");
+    expect(detail).not.toContain("<form");
+  });
 });

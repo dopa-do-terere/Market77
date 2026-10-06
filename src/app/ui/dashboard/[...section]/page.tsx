@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, Field, Icon, Input, PageHeader, StatCard, Table, type IconName } from "@/ui";
+import { Badge, Button, ButtonLink, Card, Field, Icon, Input, PageHeader, StatCard, Table, type IconName } from "@/ui";
 
 type Screen = { title: string; description: string; icon: IconName; columns: string[]; rows: string[][]; form?: { title: string; fields: string[] } };
 const screens: Record<string, Screen> = {
@@ -16,6 +16,24 @@ export default async function ScreenPreview({ params }: { params: Promise<{ sect
   if (process.env.NODE_ENV === "production") notFound();
   const { section } = await params;
   const key = section.join("/");
+  if (section[0] === "sales" && section.length === 2) {
+    const index = ["exemplo-1", "exemplo-2"].indexOf(section[1]);
+    if (index < 0) notFound();
+    const row = screens.sales.rows[index];
+    const paid = index === 0;
+    return (
+      <main className="space-y-6">
+        <PageHeader icon="sales" title="Detalhes da venda" description={`${row[1]} · ${row[0]}`} actions={<ButtonLink href="/ui/dashboard/sales" variant="secondary"><Icon name="back" /> Vendas</ButtonLink>} />
+        <Card className="metric-featured"><p className="text-sm text-muted">Total da compra</p><p className="mt-2 text-3xl font-semibold">{row[3]}</p></Card>
+        <Card icon="product" title="Itens da compra">
+          <ul className="divide-y divide-border text-sm">
+            {[["Água mineral 500 ml", "R$ 3,50"], ["Café gelado 250 ml", "R$ 12,90"], ...(paid ? [["Sanduíche natural", "R$ 12,50"]] : [])].map(([name, price]) => <li key={name} className="flex flex-wrap justify-between gap-3 py-3"><span className="font-medium">1 × {name}</span><span className="text-muted">{price} por unidade</span></li>)}
+          </ul>
+        </Card>
+        <Card icon="payment" title="Pagamentos"><div className="flex flex-wrap items-center gap-3 text-sm"><span>Pix</span><Badge tone={paid ? "success" : "warning"}>{paid ? "Confirmado" : "Pendente"}</Badge><span className="text-muted">Valor esperado: {row[3]}</span></div></Card>
+      </main>
+    );
+  }
   if (key === "markets") return (
     <main className="space-y-6">
       <PageHeader icon="market" title="Mercados" description="Gerencie suas unidades e acompanhe a operação de cada mercado." />
@@ -30,10 +48,11 @@ export default async function ScreenPreview({ params }: { params: Promise<{ sect
     </main>
   );
   const stock = section[0] === "markets" && section.length === 2;
-  const access = section[0] === "markets" && section[2] === "access";
-  const screen = screens[stock ? "stock" : access ? "access" : key];
+  const access = section[0] === "markets" && section.length === 3 && section[2] === "access";
+  const screenKey = stock ? "stock" : access ? "access" : key;
+  const screen = Object.hasOwn(screens, screenKey) ? screens[screenKey] : undefined;
   const names: Record<string, string> = { aurora: "Residencial Aurora", jardins: "Condomínio Jardins", parque: "Parque das Flores" };
-  const marketName = names[section[1]];
+  const marketName = Object.hasOwn(names, section[1]) ? names[section[1]] : undefined;
   if (!screen || ((stock || access) && !marketName)) notFound();
   const title = stock ? marketName : screen.title;
   const metrics = key === "products" ? [
@@ -49,7 +68,10 @@ export default async function ScreenPreview({ params }: { params: Promise<{ sect
   ];
   return (
     <main className="space-y-6">
-      <PageHeader icon={screen.icon} title={title} description={access ? `Entradas e leitores de ${marketName}.` : screen.description} actions={stock ? <a href={`/ui/dashboard/${key}/access`} className="text-sm font-semibold text-link">Ver acessos →</a> : undefined} />
+      <PageHeader icon={screen.icon} title={title} description={access ? `Entradas e leitores de ${marketName}.` : screen.description} actions={stock || access ? <>
+        <ButtonLink href={stock ? "/ui/dashboard/markets" : `/ui/dashboard/markets/${section[1]}`} variant="secondary"><Icon name="back" /> {stock ? "Mercados" : "Voltar ao mercado"}</ButtonLink>
+        {stock && <ButtonLink href={`/ui/dashboard/${key}/access`} variant="secondary"><Icon name="team" /> Acessos</ButtonLink>}
+      </> : undefined} />
       {screen.rows.length > 0 && <div className="grid gap-4 sm:grid-cols-3">
         {metrics.map((metric, index) => <StatCard key={metric.label} {...metric} note="Dados ilustrativos para revisão do design" featured={index === 0} />)}
       </div>}
@@ -57,7 +79,7 @@ export default async function ScreenPreview({ params }: { params: Promise<{ sect
       {key === "settings/payments" && <Card icon="payment" title="Status da conexão"><Badge tone="neutral">Não conectado · Exemplo</Badge></Card>}
       {screen.columns.length > 0 && <Table title={screen.title} description="Exemplo visual dos registros desta seção.">
         <thead><tr>{screen.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
-        <tbody>{screen.rows.map((row, index) => <tr key={index}>{row.map((value, cell) => <td key={cell}>{["Paga", "Online"].includes(value) ? <Badge tone="success">{value}</Badge> : ["Offline", "Sem NCM", "Aguardando pagamento"].includes(value) ? <Badge tone="warning">{value}</Badge> : value}</td>)}</tr>)}</tbody>
+        <tbody>{screen.rows.map((row, index) => <tr key={index}>{row.map((value, cell) => <td key={cell}>{key === "sales" && cell === 0 ? <a href={`/ui/dashboard/sales/exemplo-${index + 1}`} className="font-medium text-link hover:underline">{value}</a> : ["Paga", "Online"].includes(value) ? <Badge tone="success">{value}</Badge> : ["Offline", "Sem NCM", "Aguardando pagamento"].includes(value) ? <Badge tone="warning">{value}</Badge> : value}</td>)}</tr>)}</tbody>
       </Table>}
       {screen.form && <PreviewForm {...screen.form} />}
     </main>

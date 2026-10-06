@@ -15,7 +15,7 @@ import { listMarkets } from "@/domain/markets";
 import { formatDay } from "@/domain/lots";
 import { AppError } from "@/lib/errors";
 import { message } from "@/lib/messages";
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, StatCard, PageHeader, Table } from "@/ui";
+import { Alert, Badge, Button, ButtonLink, Icon, Card, EmptyState, Field, Input, StatCard, PageHeader, Table } from "@/ui";
 import { AccessSourceForm } from "./AccessSourceForm";
 import { forgetAccessPersonAction, revokeAccessSourceAction } from "./actions";
 
@@ -72,7 +72,7 @@ export default async function AccessPage({
   const maxHourly = Math.max(1, ...hourly.map((h) => h.entries));
   return (
     <main className="space-y-6">
-      <PageHeader icon="team" title="Acessos" description={`Entradas e leitores de ${market.name}.`} />
+      <PageHeader icon="team" title="Acessos" description={`Entradas e leitores de ${market.name}.`} actions={<ButtonLink href={`/o/${orgId}/markets/${marketId}`} variant="secondary"><Icon name="back" /> Voltar ao mercado</ButtonLink>} />
       {(error || dayError) && <Alert tone="danger">{message(error ?? dayError ?? "")}</Alert>}
 
       <Card icon="dashboard" title="Período de consulta">

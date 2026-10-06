@@ -9,7 +9,7 @@ import { UFS, listMarkets } from "@/domain/markets";
 import { listProducts } from "@/domain/products";
 import { message } from "@/lib/messages";
 import { formatBRL } from "@/lib/money";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, StatCard, Field, Input, PageHeader, Select, Table } from "@/ui";
+import { Alert, Badge, Button, ButtonLink, Icon, Card, Checkbox, EmptyState, StatCard, Field, Input, PageHeader, Select, Table } from "@/ui";
 import { moveStockAction, setMarketProductAction, updateMarketFiscalAction } from "./actions";
 
 export default async function MarketPage({
@@ -44,11 +44,10 @@ export default async function MarketPage({
         title={market?.name ?? "Estoque do mercado"}
         description="Produtos, reposição e validade da sua unidade."
         actions={
-          can(role, "access:read") && (
-            <a href={`/o/${orgId}/markets/${marketId}/access`} className="text-sm font-medium text-link hover:underline">
-              Acessos
-            </a>
-          )
+          <>
+            <ButtonLink href={`/o/${orgId}/markets`} variant="secondary"><Icon name="back" /> Mercados</ButtonLink>
+            {can(role, "access:read") && <ButtonLink href={`/o/${orgId}/markets/${marketId}/access`} variant="secondary"><Icon name="team" /> Acessos</ButtonLink>}
+          </>
         }
       />
       {error && <Alert tone="danger">{message(error)}</Alert>}

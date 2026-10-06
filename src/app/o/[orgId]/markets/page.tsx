@@ -3,7 +3,7 @@ import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listMarkets } from "@/domain/markets";
 import { message } from "@/lib/messages";
-import { Alert, Button, Card, EmptyState, Icon, StatCard, Field, Input, PageHeader } from "@/ui";
+import { Alert, Button, ButtonLink, Card, EmptyState, Icon, StatCard, Field, Input, PageHeader } from "@/ui";
 import { createMarketAction } from "./actions";
 
 export default async function MarketsPage({
@@ -19,7 +19,7 @@ export default async function MarketsPage({
   const markets = await withOrg(orgId, (tx) => listMarkets(tx));
   return (
     <main className="space-y-6">
-      <PageHeader icon="market" title="Mercados" description="Gerencie suas unidades e acompanhe a operação de cada mercado." />
+      <PageHeader icon="market" title="Mercados" description="Gerencie suas unidades e acompanhe a operação de cada mercado." actions={can(role, "market:write") ? <ButtonLink href="#new-market"><Icon name="plus" /> Novo mercado</ButtonLink> : undefined} />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard label="Seus mercados" value={markets.length} note="Unidades cadastradas na organização" icon="market" featured />

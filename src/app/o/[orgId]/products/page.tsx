@@ -3,7 +3,7 @@ import { can } from "@/auth/permissions";
 import { withOrg } from "@/db/tenant";
 import { listProducts } from "@/domain/products";
 import { message } from "@/lib/messages";
-import { Alert, Badge, Button, Card, EmptyState, Icon, StatCard, Field, Input, PageHeader, Table } from "@/ui";
+import { Alert, Badge, Button, ButtonLink, Card, EmptyState, Icon, StatCard, Field, Input, PageHeader, Table } from "@/ui";
 import { createProductAction, updateProductFiscalAction } from "./actions";
 
 export default async function ProductsPage({
@@ -19,7 +19,7 @@ export default async function ProductsPage({
   const products = await withOrg(orgId, (tx) => listProducts(tx));
   return (
     <main className="space-y-6">
-      <PageHeader icon="product" title="Produtos" description="Seu catálogo centralizado, com códigos de barras e dados fiscais." />
+      <PageHeader icon="product" title="Produtos" description="Seu catálogo centralizado, com códigos de barras e dados fiscais." actions={can(role, "product:write") ? <ButtonLink href="#new-product"><Icon name="plus" /> Novo produto</ButtonLink> : undefined} />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Produtos no catálogo" value={products.length} note="Cadastro compartilhado entre seus mercados" icon="product" featured />
@@ -61,7 +61,7 @@ export default async function ProductsPage({
         </tbody>
       </Table>
       {can(role, "product:write") && (
-        <Card icon="plus" title="Novo produto" description="Adicione um item ao catálogo da organização.">
+        <div id="new-product" className="scroll-mt-6"><Card icon="plus" title="Novo produto" description="Adicione um item ao catálogo da organização.">
           <form action={createProductAction.bind(null, orgId)} className="grid gap-4 sm:grid-cols-3">
             <Field label="Nome"><Input name="name" required minLength={2} /></Field>
             <Field label="Categoria"><Input name="category" /></Field>
@@ -70,7 +70,7 @@ export default async function ProductsPage({
               <Button type="submit">Cadastrar</Button>
             </div>
           </form>
-        </Card>
+        </Card></div>
       )}
     </main>
   );

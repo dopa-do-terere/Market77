@@ -7,7 +7,7 @@ import { listMarkets } from "@/domain/markets";
 import { listTerminals } from "@/domain/terminals";
 import { COMMAND_LABEL, COMMAND_STATUS_LABEL } from "@/lib/labels";
 import { message } from "@/lib/messages";
-import { Alert, Badge, Button, COMMAND_TONE, EmptyState, StatCard, Input, PageHeader, Table } from "@/ui";
+import { Alert, Badge, Button, ButtonLink, Icon, COMMAND_TONE, EmptyState, StatCard, Input, PageHeader, Table } from "@/ui";
 import { TerminalForm } from "./TerminalForm";
 import { revokeTerminalAction, sendCommandAction, setTerminalDeviceAction } from "./actions";
 
@@ -36,14 +36,14 @@ export default async function TerminalsPage({
   );
   return (
     <main className="space-y-6">
-      <PageHeader icon="terminal" title="Totens" description="Acompanhe a conexão dos equipamentos e gerencie o autoatendimento." />
+      <PageHeader icon="terminal" title="Totens" description="Acompanhe a conexão dos equipamentos e gerencie o autoatendimento." actions={markets.length > 0 ? <ButtonLink href="#new-terminal"><Icon name="plus" /> Novo totem</ButtonLink> : undefined} />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Totens ativos" value={terminals.filter((t) => !t.revokedAt).length} note="Equipamentos com acesso autorizado" icon="terminal" featured />
         <StatCard label="Online agora" value={terminals.filter((t) => !t.revokedAt && t.lastHeartbeatAt && isOnline(t.lastHeartbeatAt, now)).length} note="Com comunicação recente com o sistema" icon="check" />
         <StatCard label="Sem comunicação" value={terminals.filter((t) => !t.revokedAt && (!t.lastHeartbeatAt || !isOnline(t.lastHeartbeatAt, now))).length} note="Offline ou ainda não conectados" icon="warning" />
       </div>
-      <TerminalForm orgId={orgId} markets={markets.map((m) => ({ id: m.id, name: m.name }))} />
+      <div id="new-terminal" className="scroll-mt-6"><TerminalForm orgId={orgId} markets={markets.map((m) => ({ id: m.id, name: m.name }))} /></div>
       {markets.length === 0 && <Alert tone="info">Cadastre um mercado antes de cadastrar um totem.</Alert>}
       <Table title="Seus equipamentos" description="Conexão, versão do agente e comandos remotos por totem.">
         <thead>
