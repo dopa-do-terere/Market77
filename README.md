@@ -18,7 +18,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
-  <img alt="Testes" src="https://img.shields.io/badge/testes-665%20passando-2EA043">
+  <img alt="Testes" src="https://img.shields.io/badge/testes-690%20passando-2EA043">
 </p>
 
 ---
@@ -54,7 +54,7 @@ Cada **organização** (dono) tem os próprios mercados, produtos, totens e cred
 | **NFC-e** | Emissão em segundo plano a cada venda paga, com fila, novas tentativas e reemissão (provedor simulado) |
 | **Agente do totem** | Serviço no mini PC do totem: abre o PDV em tela cheia, envia heartbeat e executa comandos remotos (reiniciar, reboot, atualizar) |
 | **Controle de acesso** | Registro de entradas vindas de um leitor, sem guardar imagem nem template facial; esquecimento de pessoa e retenção de 90 dias |
-| **Painel do dono** | Mercados, produtos, equipe, totens, vendas, validade, pagamentos e acessos, com permissões por papel (dono, gerente, repositor) |
+| **Painel do dono** | Mercados, produtos, equipe, totens, vendas, validade, pagamentos e acessos, com permissões por papel (dono, gerente, repositor); interface com modo claro e escuro |
 
 ## Arquitetura
 
@@ -263,7 +263,7 @@ sudo ./install.sh https://seu-servidor <token>
 sudo reboot
 ```
 
-O instalador coloca Node 22.18+ e o Chromium, cria o usuário `kiosk` (autologin em X11), a regra `sudoers` só para `systemctl reboot`, o serviço `market77-agent` e o `market77-watchdog`, que volta à versão anterior se uma atualização não der heartbeat em 2 minutos. Para atualizar, publique uma versão nova e use **Atualizar agente** no painel: o agente baixa o pacote, confere o SHA-256, troca a versão e reinicia sozinho. O pacote fica no Postgres (limite de 20 MB).
+O instalador coloca Node 22.18+ e o Chromium, cria o usuário `kiosk` (autologin em X11), a regra `sudoers` só para `systemctl reboot`, o serviço `market77-agent` e o `market77-watchdog`, que volta à versão anterior se uma atualização não der heartbeat em 2 minutos. Para atualizar, publique uma versão nova e use **Atualizar agente** no painel: o agente baixa o pacote, confere o SHA-256, troca a versão e reinicia sozinho. O pacote fica no Postgres (limite de 20 MB). A interface usa Tailwind v4, que exige Chrome/Chromium 111 ou mais novo; o agente abre o `chromium-browser` do sistema (`browserCommand` em `agent/config.ts`), então o pacote instalado precisa ser recente.
 
 Um totem sem batida há mais de 2 minutos aparece como **offline**. Um comando que fica mais de 10 minutos na fila expira e nunca roda depois.
 
@@ -312,7 +312,9 @@ src/
   auth/       sessões, papéis e permissões
   db/         cliente, transação por organização e migrations SQL
   pdv/        handlers HTTP do totem
+  ui/         componentes da interface em React com Tailwind (tokens em src/app/globals.css)
 agent/        agente do mini PC do totem (instalador, heartbeat, watchdog)
+public/       logos
 scripts/      migrations e publicação do agente
 tests/        suíte Vitest, espelhando a estrutura de src/
 docs/         especificações e planos de cada fase (docs/superpowers/)
@@ -330,6 +332,6 @@ docs/         especificações e planos de cada fase (docs/superpowers/)
 | 5B | NFC-e (provedor simulado) | Concluída |
 | 6 | Registro de acessos (leitor simulado) | Concluída |
 | 7 | Mercado Pago: Pix e Point, credenciais por organização | Concluída (roteiro manual pendente) |
-| Próximas | Provedor fiscal real, regime normal e cancelamento de nota; leitor de acesso real; estorno e parcelamento; OAuth do Mercado Pago; outras maquininhas | Planejadas |
+| Próximas | Grade de produtos tocáveis no PDV; provedor fiscal real, regime normal e cancelamento de nota; leitor de acesso real; estorno e parcelamento; OAuth do Mercado Pago; outras maquininhas | Planejadas |
 
 Especificações e planos de cada fase estão em [`docs/superpowers/`](docs/superpowers/).
