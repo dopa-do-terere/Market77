@@ -2,7 +2,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react
 import { cx } from "./cx";
 
 const control =
-  "rounded-md border bg-surface text-fg placeholder:text-muted focus:outline-2 focus:outline-brand-600";
+  "rounded-lg border bg-surface text-fg shadow-xs transition-colors placeholder:text-muted hover:border-muted focus:outline-2 focus:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Field({ label, className, children }: { label: ReactNode; className?: string; children: ReactNode }) {
   return (
@@ -23,10 +23,11 @@ export function Input({
     <input
       className={cx(
         control,
-        touch ? "h-16 rounded-xl px-5 text-2xl" : "h-9 px-3 text-sm",
+        touch ? "h-16 rounded-xl px-5 text-2xl" : "h-10 px-3 text-sm",
         invalid ? "border-red-600" : "border-border",
         className,
       )}
+      aria-invalid={invalid || undefined}
       {...rest}
     />
   );
@@ -39,7 +40,8 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }) {
   return (
     <select
-      className={cx(control, "h-9 px-2.5 text-sm", invalid ? "border-red-600" : "border-border", className)}
+      className={cx(control, "h-10 px-3 text-sm", invalid ? "border-red-600" : "border-border", className)}
+      aria-invalid={invalid || undefined}
       {...rest}
     />
   );

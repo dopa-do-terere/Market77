@@ -3,13 +3,22 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { cx } from "./cx";
 import { Logo } from "./Logo";
+import { Icon, type IconName } from "./Icon";
 
-export type NavItem = { href: string; label: string; exact?: boolean };
+export type NavItem = { href: string; label: string; exact?: boolean; icon?: IconName };
 
 export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [open]);
   return (
     <>
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
@@ -19,22 +28,24 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
           aria-expanded={open}
           aria-controls="sidebar-nav"
           onClick={() => setOpen((o) => !o)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
+          className="flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium"
         >
-          Menu
+          <Icon name={open ? "close" : "menu"} /> Menu
         </button>
       </div>
       <aside
         id="sidebar-nav"
         className={cx(
-          "border-b border-border bg-surface md:sticky md:top-0 md:block md:h-screen md:w-60 md:shrink-0 md:overflow-y-auto md:border-r md:border-b-0",
-          open ? "block" : "hidden",
+          "flex-col border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:overflow-y-auto md:border-r md:border-b-0",
+          open ? "flex" : "hidden",
         )}
       >
-        <div className="hidden px-5 py-6 md:block">
-          <Logo className="h-7 w-auto" />
+        <div className="hidden px-6 pt-8 pb-7 md:block">
+          <Logo className="h-8 w-auto" />
+          <p className="mt-3 text-xs text-muted">Gestão de mercados autônomos</p>
         </div>
-        <nav aria-label="Principal" className="flex flex-col gap-1 px-3 py-3 md:py-0">
+        <p className="px-6 pt-4 pb-3 text-[10px] font-semibold tracking-[0.18em] text-muted uppercase">Área de gestão</p>
+        <nav aria-label="Principal" className="flex flex-col gap-1.5 px-3 pb-5">
           {items.map((item) => {
             const active = item.exact
               ? pathname === item.href
@@ -45,18 +56,24 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "rounded-md px-3 py-2 text-sm font-medium",
+                  "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
                   active
                     ? "bg-brand-50 text-brand-800 dark:bg-brand-950 dark:text-brand-200"
                     : "text-muted hover:bg-subtle hover:text-fg",
                 )}
               >
+                {item.icon && <Icon name={item.icon} className="shrink-0" />}
                 {item.label}
+                {active && <span className="ml-auto size-1.5 rounded-full bg-brand-600" />}
               </a>
             );
           })}
         </nav>
-        {footer && <div className="px-3 py-4">{footer}</div>}
+        <div className="mx-4 mt-auto rounded-xl border border-border bg-subtle p-4">
+          <p className="text-sm font-semibold">Sua operação, conectada.</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">Estoque, vendas e autoatendimento em um só lugar.</p>
+        </div>
+        {footer && <div className="mt-4 border-t border-border px-3 py-4">{footer}</div>}
       </aside>
     </>
   );

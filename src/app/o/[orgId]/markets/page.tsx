@@ -19,7 +19,7 @@ export default async function MarketsPage({
   const markets = await withOrg(orgId, (tx) => listMarkets(tx));
   return (
     <main className="space-y-6">
-      <PageHeader title="Mercados" />
+      <PageHeader title="Mercados" description="Gerencie suas unidades e acompanhe a operação de cada mercado." />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <Card>
         {markets.length === 0 && <p className="text-muted">Nenhum mercado cadastrado ainda.</p>}
@@ -35,7 +35,7 @@ export default async function MarketsPage({
         </ul>
       </Card>
       {can(role, "market:write") && (
-        <Card title="Novo mercado">
+        <div id="new-market" className="scroll-mt-8"><Card title="Novo mercado">
           <form action={createMarketAction.bind(null, orgId)} className="grid gap-4 sm:grid-cols-3">
             <Field label="Nome"><Input name="name" required minLength={2} /></Field>
             <Field label="Endereço"><Input name="address" /></Field>
@@ -44,7 +44,7 @@ export default async function MarketsPage({
               <Button type="submit">Cadastrar</Button>
             </div>
           </form>
-        </Card>
+        </Card></div>
       )}
     </main>
   );

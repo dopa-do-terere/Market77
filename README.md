@@ -290,6 +290,16 @@ Troque a senha do papel `market77_app` (`ALTER ROLE market77_app PASSWORD '...'`
 - **Simuladores** recusam funcionar com `NODE_ENV=production`.
 - **Dado biométrico (LGPD).** O sistema não guarda imagem nem template facial. A base legal (em geral, consentimento específico dos moradores) e o aviso a eles são responsabilidade de quem opera o condomínio.
 
+## Interface
+
+O painel usa cartões de indicadores, alertas operacionais e acesso rápido às unidades.
+Vendas e ticket médio vêm dos pagamentos do dia; ações seguem as permissões de cada perfil.
+A navegação tem ícones e menu no celular, com temas claro e escuro automáticos.
+Login e cadastro compartilham a identidade visual e os componentes de formulário.
+
+Com `npm run dev`, abra `/ui` para os componentes ou `/ui/dashboard` para uma
+prévia do painel com dados ilustrativos. As duas rotas retornam 404 em produção.
+
 ## Testes
 
 ```bash

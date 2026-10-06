@@ -6,6 +6,7 @@ export { Card } from "./Card";
 export { cx } from "./cx";
 export { Checkbox, Field, Input, Select } from "./Field";
 export { Logo } from "./Logo";
+export { Icon, type IconName } from "./Icon";
 export { PageHeader } from "./PageHeader";
 export { type NavItem, Sidebar } from "./Sidebar";
 export { Table } from "./Table";

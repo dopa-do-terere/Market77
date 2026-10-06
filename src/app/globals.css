@@ -2,23 +2,23 @@
 
 :root {
   color-scheme: light dark;
-  --bg: #fffdfa;
+  --bg: #f5f6f8;
   --surface: #ffffff;
-  --subtle: #faf5ef;
-  --border: #e7ddd2;
-  --fg: #1c1917;
-  --muted: #6b625b;
+  --subtle: #f8f9fb;
+  --border: #e5e7eb;
+  --fg: #202631;
+  --muted: #646d7c;
   --link: #c24e00;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0c0a09;
-    --surface: #171412;
-    --subtle: #1f1a17;
-    --border: #2f2822;
-    --fg: #faf7f4;
-    --muted: #a8a09a;
+    --bg: #101318;
+    --surface: #191e26;
+    --subtle: #202630;
+    --border: #303845;
+    --fg: #f3f4f6;
+    --muted: #a4aebb;
     --link: #ffa31a;
   }
 }
@@ -57,5 +57,16 @@
   body {
     background: var(--bg);
     color: var(--fg);
+  }
+  ::selection {
+    background: #fed7aa;
+    color: #431a03;
+  }
+  a, button, input, select, summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 4px;
   }
 }

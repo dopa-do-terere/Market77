@@ -2,9 +2,9 @@ import type { ButtonHTMLAttributes } from "react";
 import { cx } from "./cx";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600";
 const variants = {
-  primary: "bg-brand-700 text-white hover:bg-brand-800",
+  primary: "bg-brand-700 text-white shadow-sm hover:bg-brand-800",
   secondary: "border border-border bg-surface text-fg hover:bg-subtle",
   ghost: "text-fg hover:bg-subtle",
 };

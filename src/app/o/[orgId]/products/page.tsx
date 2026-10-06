@@ -19,13 +19,14 @@ export default async function ProductsPage({
   const products = await withOrg(orgId, (tx) => listProducts(tx));
   return (
     <main className="space-y-6">
-      <PageHeader title="Produtos" />
+      <PageHeader title="Produtos" description="Seu catálogo centralizado, com códigos de barras e dados fiscais." />
       {error && <Alert tone="danger">{message(error)}</Alert>}
       <Table>
         <thead>
           <tr><th>Nome</th><th>Categoria</th><th>Códigos de barras</th><th>NCM</th></tr>
         </thead>
         <tbody>
+          {products.length === 0 && <tr><td colSpan={4} className="text-center text-muted">Nenhum produto cadastrado. Comece adicionando seu catálogo.</td></tr>}
           {products.map((p) => (
             <tr key={p.id}>
               <td className="font-medium">{p.name}</td>
