@@ -9,7 +9,7 @@ Dar ao Market77 uma interface coerente, com identidade própria, em React com Ta
 
 A referência visual é o site da Mintlify (fundo limpo, bordas finas, cantos arredondados, sombras mínimas, hero grande, modo claro e escuro), com tons de laranja do logo no lugar do verde.
 
-Critério de sucesso: painel, PDV, login, signup e home usam os mesmos tokens e componentes; claro e escuro funcionam; os 665 testes existentes continuam passando sem alteração; `typecheck` e `next build` passam ao fim de cada fase.
+Critério de sucesso: painel, PDV, login e signup usam os mesmos tokens e componentes; claro e escuro funcionam; os 665 testes existentes continuam passando sem alteração; `typecheck` e `next build` passam ao fim de cada fase.
 
 Fora de escopo: grade de produtos tocáveis no PDV (o leitor de código de barras continua sendo o único jeito de adicionar item; a grade vira fase própria depois), landing de marketing, internacionalização, animações.
 
@@ -67,7 +67,7 @@ Cada componente é uma função React que recebe props de variante e `className`
 
 - `PdvApp.tsx`: remove os estilos inline (`CSSProperties`) e usa classes Tailwind. Escala de toque: texto de 24 px ou mais, botões `touch`, alto contraste, sem estados de hover, `select-none`. Lógica, estados, `createScanner` e polling não mudam.
 - Login e signup: card centralizado com logo.
-- Home (`src/app/page.tsx`): redireciona ou aponta para login como hoje, com o mesmo visual.
+- Home (`src/app/page.tsx`): só redireciona (login ou primeiro painel) e não renderiza nada; não muda.
 
 ## 7. Testes e verificação
 
