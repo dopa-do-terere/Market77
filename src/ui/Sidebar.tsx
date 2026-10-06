@@ -36,7 +36,7 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
       <aside
         id="sidebar-nav"
         className={cx(
-          "flex-col border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:overflow-y-auto md:border-r md:border-b-0",
+          "workspace-rail flex-col border-b border-border md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:overflow-y-auto md:border-r md:border-b-0",
           open ? "flex" : "hidden",
         )}
       >
@@ -58,18 +58,18 @@ export function Sidebar({ items, footer }: { items: NavItem[]; footer?: ReactNod
                 className={cx(
                   "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
                   active
-                    ? "bg-brand-50 text-brand-800 dark:bg-brand-950 dark:text-brand-200"
+                    ? "bg-brand-700 text-white shadow-sm"
                     : "text-muted hover:bg-subtle hover:text-fg",
                 )}
               >
                 {item.icon && <Icon name={item.icon} className="shrink-0" />}
                 {item.label}
-                {active && <span className="ml-auto size-1.5 rounded-full bg-brand-600" />}
+                {active && <Icon name="arrow" className="ml-auto size-4" />}
               </a>
             );
           })}
         </nav>
-        <div className="mx-4 mt-auto rounded-xl border border-border bg-subtle p-4">
+        <div className="mx-4 mt-auto rounded-2xl border border-brand-200 bg-brand-100/50 p-4 dark:border-brand-900 dark:bg-brand-950">
           <p className="text-sm font-semibold">Sua operação, conectada.</p>
           <p className="mt-1 text-xs leading-relaxed text-muted">Estoque, vendas e autoatendimento em um só lugar.</p>
         </div>

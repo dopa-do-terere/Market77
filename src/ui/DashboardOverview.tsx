@@ -16,10 +16,10 @@ export type DashboardOverviewProps = {
 
 function Metric({ label, value, note, icon, featured = false }: { label: string; value: string | number; note: string; icon: IconName; featured?: boolean }) {
   return (
-    <section className={`rounded-2xl border p-5 shadow-sm ${featured ? "border-brand-200 bg-brand-50 dark:border-brand-900 dark:bg-brand-950" : "border-border bg-surface"}`}>
+    <section className={`rounded-2xl border p-5 shadow-sm ${featured ? "metric-featured" : "border-border bg-surface"}`}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-muted">{label}</h2>
-        <span className={`flex size-9 items-center justify-center rounded-xl ${featured ? "bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200" : "bg-subtle text-muted"}`}><Icon name={icon} /></span>
+        <span className={`flex size-9 items-center justify-center rounded-xl ${featured ? "bg-white/10 text-brand-200" : "bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-200"}`}><Icon name={icon} /></span>
       </div>
       <p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
       <p className="mt-2 text-xs leading-relaxed text-muted">{note}</p>
@@ -33,7 +33,10 @@ export function DashboardOverview({ base, markets, today, offline, fiscalErrors,
   const attention = markets.filter((market) => market.lowCount > 0 || market.expired > 0);
   return (
     <main className="space-y-8">
-      <PageHeader title="Visão geral" description="Acompanhe os resultados e o que precisa de atenção na sua operação." actions={canCreateMarket ? <a href={`${base}/markets#new-market`} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-800"><Icon name="plus" /> Novo mercado</a> : undefined} />
+      <div className="dashboard-hero px-6 py-8 md:px-8 md:py-10">
+        <p className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-widest uppercase"><span className="size-2 rounded-full bg-brand-700 dark:bg-brand-300" /> Market77 · Visão geral</p>
+        <PageHeader title="Sua operação, em foco." description="Cada mercado, cada venda, cada detalhe. Um olhar claro para o que acontece e o que precisa de você." actions={canCreateMarket ? <a href={`${base}/markets#new-market`} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#45260f] px-5 text-sm font-medium text-white shadow-sm hover:bg-[#60371b]"><Icon name="plus" /> Novo mercado</a> : undefined} />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {today && <Metric label="Vendas hoje" value={formatBRL(today.totalCents)} note={`${today.count} ${today.count === 1 ? "venda paga" : "vendas pagas"} no dia local de cada mercado`} icon="sales" featured />}
         <Metric label="Mercados cadastrados" value={markets.length} note="Unidades da sua organização" icon="market" />
@@ -58,7 +61,7 @@ export function DashboardOverview({ base, markets, today, offline, fiscalErrors,
               {markets.map((market) => (
                 <li key={market.id}>
                   <a href={`${base}/markets/${market.id}`} className="group grid grid-cols-[44px_minmax(0,1fr)_16px] items-center gap-x-4 gap-y-3 px-6 py-5 sm:flex sm:flex-wrap transition-colors hover:bg-subtle">
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted"><Icon name="market" /></span>
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-200"><Icon name="market" /></span>
                     <div className="min-w-0 flex-1"><h3 className="break-words font-semibold group-hover:text-link">{market.name}</h3><p className="mt-1 break-words text-xs text-muted">{market.address || "Endereço não informado"}</p></div>
                     <div className="col-span-2 col-start-2 row-start-2 flex flex-wrap gap-2">
                       {market.lowCount > 0 && <Badge tone="warning">{market.lowCount} com estoque baixo</Badge>}

@@ -2,24 +2,26 @@
 
 :root {
   color-scheme: light dark;
-  --bg: #f5f6f8;
-  --surface: #ffffff;
-  --subtle: #f8f9fb;
-  --border: #e5e7eb;
-  --fg: #202631;
-  --muted: #646d7c;
+  --bg: #fffaf2;
+  --surface: #fffefa;
+  --subtle: #fff3e2;
+  --border: #efdfca;
+  --fg: #35251d;
+  --muted: #7b6454;
   --link: #c24e00;
+  --rail: #fff4e3;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101318;
-    --surface: #191e26;
-    --subtle: #202630;
-    --border: #303845;
-    --fg: #f3f4f6;
-    --muted: #a4aebb;
+    --bg: #180f0b;
+    --surface: #241811;
+    --subtle: #302016;
+    --border: #4a3222;
+    --fg: #fff5e9;
+    --muted: #c6ac95;
     --link: #ffa31a;
+    --rail: #21140d;
   }
 }
 
@@ -50,7 +52,54 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
-  --shadow-sm: 0 1px 2px 0 rgb(28 25 23 / 0.06);
+  --shadow-sm: 0 3px 16px -8px rgb(106 56 15 / 0.18);
+}
+
+@layer components {
+  .workspace-rail {
+    background: var(--rail);
+  }
+  .dashboard-hero {
+    --muted: #74431f;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid #ffcb88;
+    border-radius: 1.5rem;
+    background: linear-gradient(115deg, #fff0d6 0%, #ffd093 65%, #ffb453 100%);
+    color: #45260f;
+  }
+  .dashboard-hero::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    right: -2rem;
+    top: -5rem;
+    width: 20rem;
+    height: 20rem;
+    border: 2.5rem solid rgb(255 255 255 / 0.24);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2.5rem rgb(255 255 255 / 0.12), 0 0 0 5rem rgb(255 255 255 / 0.1);
+  }
+  .metric-featured {
+    --muted: #efd0ab;
+    background: linear-gradient(135deg, #422617, #64351b);
+    border-color: #64351b;
+    color: #fff5e5;
+  }
+  .auth-story {
+    --muted: #74431f;
+    background: linear-gradient(145deg, #fff1d8, #ffd18e 65%, #ffa644);
+    color: #45260f;
+  }
+  @media (prefers-color-scheme: dark) {
+    .dashboard-hero, .auth-story {
+      --muted: #f1cfab;
+      background: linear-gradient(125deg, #472515, #763b14 70%, #9a4b0c);
+      border-color: #9a4b0c;
+      color: #fff3df;
+    }
+  }
 }
 
 @layer base {
