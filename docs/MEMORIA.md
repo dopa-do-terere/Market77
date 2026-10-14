@@ -5,7 +5,7 @@ Fonte unica de contexto minimo. Leia ao iniciar. Mantenha curta (max ~80 linhas)
 ## Projeto
 SaaS para mercados autonomos (Next.js 15, React 19, TypeScript, PostgreSQL 16, vitest). Multi-tenant via `withOrg()`. Provedores atras de contratos (`PaymentProvider`, `CardProvider`, `FiscalProvider`, `AccessProvider`) com fake e real. Fases 1-7 concluidas; ver README (Roadmap) e docs/superpowers/.
 
-## Time no Maestri (workspace MARKET77)
+## Time no Maestri (workspace "MARKET77 SSD", dir /Volumes/DEV/Type77/Market77; o MARKET77 antigo no iCloud esta obsoleto)
 - Claude Code = Maestro: planeja, delega, integra. Nao le codigo para "entender".
 - Forja (Codex) backend: src/domain, db, fiscal, payments, auth, access.
 - Prisma (Codex) frontend: src/ui, app, pdv.
@@ -26,4 +26,5 @@ SaaS para mercados autonomos (Next.js 15, React 19, TypeScript, PostgreSQL 16, v
 - Pendente decisao do usuario: provedor fiscal NFC-e real (item A1 do checklist).
 
 ## Log (mais novo no topo; 1 linha por marco)
+- 2026-10-14 Projeto movido do iCloud para o SSD /Volumes/DEV (iCloud corrompia .git). Remoto: github dopa-do-terere/Market77.
 - 2026-10-14 Time recrutado, checklist criado, memoria criada. Branch feat/design-system, commit 58c537b.
