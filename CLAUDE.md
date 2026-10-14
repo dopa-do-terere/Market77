@@ -1,5 +1,7 @@
 # Market77 - orquestracao
 
+@docs/MEMORIA.md (memoria do projeto: ler ao iniciar; ao fechar um marco, 1 linha no Log)
+
 ## Analisador de esforco (rodar ANTES de delegar ou agir)
 
 Classifique a tarefa em um nivel e use o agente mais barato que o cobre.
