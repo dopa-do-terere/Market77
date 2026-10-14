@@ -5,7 +5,7 @@ const MATRIX = {
   owner: [
     "member:write", "market:write", "product:write", "price:write", "stock:move", "stock:read",
     "catalog:read", "terminal:write", "sale:read",
-    "access:read", "access:write", "payment:write",
+    "access:read", "access:write", "payment:write", "branding:write",
   ],
   manager: ["product:write", "price:write", "stock:move", "stock:read", "catalog:read", "sale:read"],
   restocker: ["stock:move", "stock:read", "catalog:read"],

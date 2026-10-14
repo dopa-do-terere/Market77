@@ -3,6 +3,7 @@ import { requireOrgPage } from "@/auth/guard";
 import { withOrg } from "@/db/tenant";
 import { mercadoPagoStatus } from "@/domain/credentials";
 import { message } from "@/lib/messages";
+import { Alert, Badge, Button, Card, Field, Input, PageHeader } from "@/ui";
 import { removeCredentialsAction, saveCredentialsAction, testCredentialsAction } from "./actions";
 
 const OK: Record<string, string> = {
@@ -25,39 +26,54 @@ export default async function PaymentsSettingsPage({
   const h = await headers();
   const base = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   return (
-    <main>
-      <h1>Pagamentos (Mercado Pago)</h1>
-      {error && <p role="alert">{message(error)}</p>}
-      {ok && OK[ok] && <p role="status">{OK[ok]}</p>}
-      <p>
-        {status.configured
-          ? `Conectado. Token terminando em ${status.last4}, atualizado em ${status.updatedAt?.toLocaleString("pt-BR")}.`
-          : "Não conectado. Os pagamentos usam o simulador."}
-      </p>
-      <form action={saveCredentialsAction.bind(null, orgId)}>
-        <label>
-          Access token <input name="accessToken" type="password" required autoComplete="off" />
-        </label>{" "}
-        <label>
-          Segredo do webhook <input name="webhookSecret" type="password" required autoComplete="off" />
-        </label>{" "}
-        <button type="submit">{status.configured ? "Trocar credenciais" : "Salvar credenciais"}</button>
-      </form>
-      {status.configured && (
-        <>
-          <form action={testCredentialsAction.bind(null, orgId)} style={{ display: "inline" }}>
-            <button type="submit">Testar</button>
-          </form>{" "}
-          <form action={removeCredentialsAction.bind(null, orgId)} style={{ display: "inline" }}>
-            <button type="submit">Remover</button>
-          </form>
-        </>
-      )}
-      <h2>URLs de webhook</h2>
-      <p>No painel do Mercado Pago, cadastre esta URL e ative os dois tópicos nela: Pagamentos (Pix) e Orders (Mercado Pago, cartão). Copie o segredo gerado para o campo acima.</p>
-      <p>
-        <code>{`${base}/api/webhooks/mercadopago/${orgId}`}</code>
-      </p>
+    <main className="space-y-6">
+      <PageHeader icon="payment" title="Pagamentos" description="Conecte sua conta Mercado Pago para receber por Pix e cartão." />
+      {error && <Alert tone="danger">{message(error)}</Alert>}
+      {ok && OK[ok] && <Alert tone="success">{OK[ok]}</Alert>}
+      <Card icon="payment" title="Conexão com Mercado Pago" description="Credenciais da conta que recebe os pagamentos da organização.">
+        <p className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-subtle p-4 text-sm">
+          {status.configured ? (
+            <>
+              <Badge tone="success">Conectado</Badge>
+              <span className="text-muted">
+                Token terminando em {status.last4}, atualizado em {status.updatedAt?.toLocaleString("pt-BR")}.
+              </span>
+            </>
+          ) : (
+            <>
+              <Badge tone="neutral">Não conectado</Badge>
+              <span className="text-muted">Os pagamentos usam o simulador.</span>
+            </>
+          )}
+        </p>
+        <form action={saveCredentialsAction.bind(null, orgId)} className="grid gap-4 sm:grid-cols-2">
+          <Field label="Access token">
+            <Input name="accessToken" type="password" required autoComplete="off" />
+          </Field>
+          <Field label="Segredo do webhook">
+            <Input name="webhookSecret" type="password" required autoComplete="off" />
+          </Field>
+          <div className="sm:col-span-2">
+            <Button type="submit">{status.configured ? "Trocar credenciais" : "Salvar credenciais"}</Button>
+          </div>
+        </form>
+        {status.configured && (
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-5">
+            <form action={testCredentialsAction.bind(null, orgId)}>
+              <Button type="submit" variant="secondary">Testar</Button>
+            </form>
+            <form action={removeCredentialsAction.bind(null, orgId)}>
+              <Button type="submit" variant="secondary">Remover</Button>
+            </form>
+          </div>
+        )}
+      </Card>
+      <Card icon="terminal" title="Notificações de pagamento" description="Configure a comunicação do Mercado Pago com seus mercados.">
+        <p className="mb-3 text-muted">
+          No painel do Mercado Pago, cadastre esta URL e ative os dois tópicos nela: Pagamentos (Pix) e Orders (Mercado Pago, cartão). Copie o segredo gerado para o campo acima.
+        </p>
+        <code className="block break-all rounded-md bg-subtle px-3 py-2 text-sm">{`${base}/api/webhooks/mercadopago/${orgId}`}</code>
+      </Card>
     </main>
   );
 }

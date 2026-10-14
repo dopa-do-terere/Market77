@@ -6,7 +6,7 @@ import { listExpiryAlerts } from "@/domain/lots";
 import { listMarkets } from "@/domain/markets";
 import { countFiscalErrors, salesToday } from "@/domain/sale-queries";
 import { listLowStock } from "@/domain/stock";
-import { formatBRL } from "@/lib/money";
+import { DashboardOverview } from "@/ui/DashboardOverview";
 
 export default async function Dashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
@@ -24,37 +24,13 @@ export default async function Dashboard({ params }: { params: Promise<{ orgId: s
     fiscalErrors: can(role, "sale:read") ? await countFiscalErrors(tx) : null,
   }));
   return (
-    <main>
-      <h1>Painel</h1>
-      {offline !== null && offline > 0 && (
-        <p role="alert">
-          <a href={`/o/${orgId}/terminals`}>
-            <strong>{offline} totem(ns) offline</strong>
-          </a>
-        </p>
-      )}
-      {fiscalErrors !== null && fiscalErrors > 0 && (
-        <p role="alert">
-          <a href={`/o/${orgId}/sales`}>
-            <strong>{fiscalErrors} nota(s) com erro</strong>
-          </a>
-        </p>
-      )}
-      {today && (
-        <p>
-          Vendas hoje: <strong>{formatBRL(today.totalCents)}</strong> ({today.count})
-        </p>
-      )}
-      {markets.length === 0 && <p>Nenhum mercado cadastrado ainda.</p>}
-      <ul>
-        {markets.map((m) => (
-          <li key={m.id}>
-            <a href={`/o/${orgId}/markets/${m.id}`}>{m.name}</a>
-            {m.low.length > 0 && <strong> ({m.low.length} produto(s) com estoque baixo)</strong>}
-            {m.expired > 0 && <strong> ({m.expired} lote(s) vencido(s))</strong>}
-          </li>
-        ))}
-      </ul>
-    </main>
+    <DashboardOverview
+      base={`/o/${orgId}`}
+      markets={markets.map((market) => ({ ...market, lowCount: market.low.length }))}
+      today={today}
+      offline={offline}
+      fiscalErrors={fiscalErrors}
+      canCreateMarket={can(role, "market:write")}
+    />
   );
 }

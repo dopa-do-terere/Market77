@@ -15,6 +15,7 @@ import { listMarkets } from "@/domain/markets";
 import { formatDay } from "@/domain/lots";
 import { AppError } from "@/lib/errors";
 import { message } from "@/lib/messages";
+import { Alert, Badge, Button, ButtonLink, Icon, Card, EmptyState, Field, Input, StatCard, PageHeader, Table } from "@/ui";
 import { AccessSourceForm } from "./AccessSourceForm";
 import { forgetAccessPersonAction, revokeAccessSourceAction } from "./actions";
 
@@ -67,97 +68,129 @@ export default async function AccessPage({
       : e.status === "unregistered"
         ? `Pessoa não cadastrada (id ${e.personExternalId})`
         : "Não identificada";
+  const selectedSummary = summary.find((r) => r.day === chosen);
+  const maxHourly = Math.max(1, ...hourly.map((h) => h.entries));
   return (
-    <main>
-      <h1>Acessos: {market.name}</h1>
-      {(error || dayError) && <p role="alert">{message(error ?? dayError ?? "")}</p>}
+    <main className="space-y-6">
+      <PageHeader icon="team" title="Acessos" description={`Entradas e leitores de ${market.name}.`} actions={<ButtonLink href={`/o/${orgId}/markets/${marketId}`} variant="secondary"><Icon name="back" /> Voltar ao mercado</ButtonLink>} />
+      {(error || dayError) && <Alert tone="danger">{message(error ?? dayError ?? "")}</Alert>}
 
-      <h2>Resumo por dia</h2>
-      <table>
-        <thead>
-          <tr><th>Dia</th><th>Entradas</th><th>Pessoas</th><th>Vendas pagas</th><th>Vendas por entrada</th></tr>
-        </thead>
-        <tbody>
-          {summary.map((r) => (
-            <tr key={r.day}>
-              <td><a href={`?day=${r.day}`}>{formatDay(r.day)}</a></td>
-              <td>{r.entries}</td>
-              <td>{r.people}</td>
-              <td>{r.paidSales}</td>
-              <td>{ratio(r.salesPerEntry)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Card icon="dashboard" title="Período de consulta">
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <Field label="Dia"><Input name="day" type="date" defaultValue={chosen} required /></Field>
+          <Button type="submit">Consultar acessos</Button>
+        </form>
+      </Card>
+      {selectedSummary && <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Entradas no dia" value={selectedSummary.entries} note={formatDay(selectedSummary.day)} icon="team" featured />
+        <StatCard label="Pessoas no dia" value={selectedSummary.people} note="Pessoas distintas registradas" icon="team" />
+        <StatCard label="Vendas pagas no dia" value={selectedSummary.paidSales} note="Pedidos confirmados nesta unidade" icon="sales" />
+      </div>}
+      <section className="space-y-3">
+        <Table title="Resumo por dia" description="Compare entradas, pessoas e vendas pagas da unidade.">
+          <thead>
+            <tr><th>Dia</th><th>Entradas</th><th>Pessoas</th><th>Vendas pagas</th><th>Vendas por entrada</th></tr>
+          </thead>
+          <tbody>
+            {summary.length === 0 && <tr><td colSpan={5}><EmptyState icon="team" title="Ainda não há acessos" description="As entradas aparecerão aqui quando um leitor conectado enviar os primeiros eventos." /></td></tr>}
+            {summary.map((r) => (
+              <tr key={r.day}>
+                <td><a href={`?day=${r.day}`} className="font-medium text-link hover:underline">{formatDay(r.day)}</a></td>
+                <td>{r.entries}</td>
+                <td>{r.people}</td>
+                <td>{r.paidSales}</td>
+                <td>{ratio(r.salesPerEntry)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </section>
 
       {chosen && !dayError && (
-        <>
-          <h2>Entradas por hora em {formatDay(chosen)}</h2>
-          <table>
-            <thead>
-              <tr><th>Hora</th><th>Entradas</th></tr>
-            </thead>
-            <tbody>
-              {hourly.filter((h) => h.entries > 0).map((h) => (
-                <tr key={h.hour}><td>{String(h.hour).padStart(2, "0")}h</td><td>{h.entries}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          {hourly.every((h) => h.entries === 0) && <p>Nenhuma entrada neste dia.</p>}
-        </>
+        hourly.every((h) => h.entries === 0) ? (
+          <Card title={`Entradas por hora em ${formatDay(chosen)}`}>
+            <p className="text-muted">Nenhuma entrada neste dia.</p>
+          </Card>
+        ) : (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">Entradas por hora em {formatDay(chosen)}</h2>
+            <Table>
+              <thead>
+                <tr><th>Hora</th><th>Entradas</th></tr>
+              </thead>
+              <tbody>
+                {hourly.filter((h) => h.entries > 0).map((h) => (
+                  <tr key={h.hour}><td className="w-24 tabular-nums">{String(h.hour).padStart(2, "0")}h</td><td><div className="flex items-center gap-3"><div aria-hidden="true" className="h-2 max-w-md flex-1 overflow-hidden rounded-full bg-subtle"><div className="h-full rounded-full bg-brand-700" style={{ width: `${h.entries / maxHourly * 100}%` }} /></div><span className="w-10 text-right font-semibold tabular-nums">{h.entries}</span></div></td></tr>
+                ))}
+              </tbody>
+            </Table>
+          </section>
+        )
       )}
 
-      <h2>Acessos recentes</h2>
-      {recent.length === 0 && <p>Nenhum acesso registrado ainda.</p>}
-      <ul>
-        {recent.map((e) => (
-          <li key={e.id}>
-            {when(e.occurredAt)}, {e.sourceName}: {personLabel(e)}
-          </li>
-        ))}
-      </ul>
+      <Card icon="team" title="Acessos recentes" description="Últimas entradas registradas pelos leitores.">
+        {recent.length === 0 && <EmptyState icon="team" title="Nenhum acesso registrado" description="As novas entradas aparecerão nesta lista." />}
+        <ul className="-my-4 divide-y divide-border">
+          {recent.map((e) => (
+            <li key={e.id} className="py-3">
+              <span className="text-muted">{when(e.occurredAt)}, {e.sourceName}:</span> {personLabel(e)}
+            </li>
+          ))}
+        </ul>
+      </Card>
 
-      <h2>Pessoas</h2>
-      {people.length === 0 && <p>Nenhuma pessoa sincronizada ainda.</p>}
-      <ul>
-        {people.map((p) => (
-          <li key={p.id}>
-            {p.forgotten ? "Removida a pedido" : p.name} (id {p.externalId}, {p.sourceName}
-            {!p.active && !p.forgotten ? ", inativa" : ""})
-            {canWrite && !p.forgotten && (
-              <details>
-                <summary>Esquecer pessoa</summary>
-                <p>Apaga o nome e o identificador dos acessos antigos. Não pode ser desfeito.</p>
-                <form action={forgetAccessPersonAction.bind(null, orgId, marketId, p.id)}>
-                  <button type="submit">Confirmar</button>
-                </form>
-              </details>
-            )}
-          </li>
-        ))}
-      </ul>
+      <Card icon="team" title="Pessoas" description="Cadastros sincronizados com os leitores desta unidade.">
+        {people.length === 0 && <EmptyState icon="team" title="Nenhuma pessoa sincronizada" description="Os cadastros disponíveis no leitor aparecem após a sincronização." />}
+        <ul className="-my-4 divide-y divide-border">
+          {people.map((p) => (
+            <li key={p.id} className="py-3">
+              {p.forgotten ? "Removida a pedido" : p.name}{" "}
+              <span className="text-muted">
+                (id {p.externalId}, {p.sourceName}
+                {!p.active && !p.forgotten ? ", inativa" : ""})
+              </span>
+              {canWrite && !p.forgotten && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm font-medium text-link">Esquecer pessoa</summary>
+                  <p className="mt-2 text-sm text-muted">Apaga o nome e o identificador dos acessos antigos. Não pode ser desfeito.</p>
+                  <form action={forgetAccessPersonAction.bind(null, orgId, marketId, p.id)} className="mt-2">
+                    <Button type="submit" variant="secondary">Confirmar</Button>
+                  </form>
+                </details>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Card>
 
-      <h2>Leitores</h2>
-      {canWrite && <AccessSourceForm orgId={orgId} marketId={marketId} />}
-      {sources.length === 0 && <p>Nenhum leitor cadastrado.</p>}
-      <ul>
-        {sources.map((s) => (
-          <li key={s.id}>
-            <strong>{s.name}</strong>
-            {s.revokedAt ? " (revogado)" : ""}: {s.activePeople} pessoa(s) ativa(s), última sincronização{" "}
-            {s.lastSyncAt ? when(s.lastSyncAt) : "nunca"}, último evento {s.lastEventAt ? when(s.lastEventAt) : "nunca"}
-            {s.lastSyncError && <strong role="alert"> (erro na sincronização: {s.lastSyncError})</strong>}
-            {canWrite && !s.revokedAt && (
-              <form action={revokeAccessSourceAction.bind(null, orgId, marketId, s.id)} style={{ display: "inline" }}>
-                {" "}
-                <button type="submit">Revogar</button>
-              </form>
-            )}
-          </li>
-        ))}
-      </ul>
+      <Card icon="terminal" title="Leitores" description="Equipamentos conectados ao controle de acesso.">
+        <div className="space-y-4">
+          {canWrite && <AccessSourceForm orgId={orgId} marketId={marketId} />}
+          {sources.length === 0 && <p className="text-muted">Nenhum leitor cadastrado.</p>}
+          <ul className="divide-y divide-border">
+            {sources.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 py-3">
+                <strong>{s.name}</strong>
+                {s.revokedAt && <Badge tone="neutral">revogado</Badge>}
+                <span className="text-muted">
+                  {s.activePeople} pessoa(s) ativa(s), última sincronização {s.lastSyncAt ? when(s.lastSyncAt) : "nunca"},
+                  último evento {s.lastEventAt ? when(s.lastEventAt) : "nunca"}
+                </span>
+                {s.lastSyncError && (<span role="alert"><Badge tone="danger">erro na sincronização: {s.lastSyncError}</Badge></span>)}
+                {canWrite && !s.revokedAt && (
+                  <form action={revokeAccessSourceAction.bind(null, orgId, marketId, s.id)}>
+                    <Button type="submit" variant="secondary">Revogar</Button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
       <p>
-        <a href={`/o/${orgId}/markets/${marketId}`}>Voltar ao mercado</a>
+        <a href={`/o/${orgId}/markets/${marketId}`} className="font-medium text-link hover:underline">
+          Voltar ao mercado
+        </a>
       </p>
     </main>
   );

@@ -18,6 +18,7 @@ Object.assign(process.env, env);
 
 export default defineConfig({
   resolve: { alias: { "@": path.resolve("src") } },
+  esbuild: { jsx: "automatic" },
   test: {
     env,
     exclude: [...configDefaults.exclude, ".claude/**"], // parallel agent worktrees live there
